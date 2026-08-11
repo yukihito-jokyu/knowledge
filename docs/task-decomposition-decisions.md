@@ -4357,3 +4357,99 @@ Issue作成前に、Task Map、決定記録、完成済み接続台帳、Issue�
 ### 承認記録
 
 - 2026-08-11: ユーザーが専用ブランチの作成・push、`.codex/hooks.json`の追加コミット、および全141件のIssue作成を承認した。
+
+---
+
+## 決定 041: 本人による明示的な不知を表す8番目のKnowledge Assessment状態
+
+- 状態: 承認済み・Commit前反映中
+- 対象: Issue #1、L1-M1-S1、L4-M2、L4-M3、L4・L6のKnowledge Assessment参照、Issue #28〜#32
+- 日付: 2026-08-11
+
+### 前提知識
+
+`no_evidence`は、必要な探索を行っても、利用者本人が対象命題を知っているとも知らないとも判断できる根拠を観測していない状態である。利用者本人が「知らない」と直接述べた場合は根拠が存在するため、`no_evidence`ではない。`uncertain`は根拠の不足や競合で一つの状態へ確定できない場合であり、明確な不知申告とは異なる。
+
+### 問題
+
+Issue #1は「知っている／知らない」という本人申告を根拠候補に含めながら、Knowledge Assessmentを7状態に固定していた。そのため、利用者本人が対象命題を知らないと明示し、その申告を採用済みの根拠にした場合を、既存7状態の意味を壊さず保存できなかった。
+
+### 承認された修正
+
+- `reported_unknown`（利用者本人が知らないと明示した状態）を8番目のKnowledge Assessment状態として追加する。
+- `reported_unknown`は、利用者本人による明示的な不知申告を採用済みの根拠にした場合だけ使用する。
+- 質問、説明依頼、AIによる説明、情報への露出、根拠の不在から`reported_unknown`を設定しない。
+- `no_evidence`は未観測、`uncertain`は判定不能、`contradicted`は命題と矛盾する理解として、意味を変更しない。
+- Knowledge Assessmentの状態数を参照するTask Map、接続台帳、Issue #1、Issue #28〜#32、後続設計は8状態へ同期する。
+
+### 理由
+
+未観測と本人による明示的な不知を区別し、状態から採用済みの根拠まで正確に説明できるようにするためである。既存7状態の意味を変更して異なる状況を一つへまとめることを避ける。
+
+### 影響範囲と変更しない事項
+
+- Knowledge Assessmentの状態数と、`reported_unknown`を扱う後続設計・評価だけを変更する。
+- Recognition Gainの7種類、Reading Recommendationの3種類、Task数、階層、依存DAG、Gate数、成果物Ownerは変更しない。
+- 過去の決定記録にある「7状態」は当時の承認内容として保持し、本決定が後から変更したことを追跡可能にする。
+
+### Owner境界とCommit分離
+
+- `docs/design/knowledge-model/logical-schema.md`は`L1-M1-S1`の単一Owner成果物として扱う。
+- `docs/task-map.md`、`docs/task-connections.md`、`docs/task-decomposition-decisions.md`は、利用者が承認した8状態を計画へ同期するための明示的なplanning integration変更として扱う。
+- `scripts/task_issue_sync.sh`は、親Taskをleafの着手依存へ誤って追加する問題を再発させず、Ruby実行環境への暗黙依存をなくすためのIssue同期ツール変更として扱う。
+- `.agents/skills/explain-with-context/`は、利用者が別途依頼したプロジェクトSkillであり、Issue #28の成果物へ含めない。
+- `.agents/skills/conduct-task-discussion/`と、同Skillをworktree引継ぎで指定するための`.agents/skills/manage-task-worktrees/SKILL.md`および`references/lifecycle.md`、`references/session-handoff-template.md`、`scripts/manage_worktree.sh`は、利用者が別途依頼した議論・引継ぎ手順の変更であり、Issue #28の成果物へ含めない。
+- 利用者がCommitを承認した後も、上記のOwnerごとにCommitを分け、Issue #28の成果物Commitへ別Ownerの変更を混在させない。
+
+### 承認記録
+
+- 2026-08-11: ユーザーが選択肢Aを採用し、`reported_unknown`を8番目の状態として追加することを承認した。
+- 2026-08-11: ユーザーが、発見済みの矛盾をCommit直前まで修正・同期するよう指示した。Commitは別途明示承認を得るまで行わない。
+
+---
+
+## 決定 042: Task Issue同期ツールをBashへ置換する
+
+- 状態: 承認済み・Commit前反映中
+- 対象: `scripts/task_issue_sync.sh`、現行の再生成手順、Task Issue同期の検証手順
+- 日付: 2026-08-11
+
+### 前提知識
+
+`task_issue_sync`は製品本体のKnowledge CLIではない。承認済みTask Mapを読み、Task数・親子関係・依存関係・成果物Ownerを検査し、接続台帳を生成し、必要な場合だけGitHub Task Issueを同期する計画管理用ツールである。
+
+Bashはコマンドをどの順番で実行し、途中で失敗した場合にどこで停止するかを記述する実行環境である。`jq`はJSONを項目単位で読み書きするコマンドであり、GitHub Issue本文に含まれる日本語、改行、Markdown記号を通常の文字列分割で壊さないために必要である。対応版はBash 3.2以上と`jq` 1.6以上とし、スクリプトが実行前に版を検査する。`rtk`はこのリポジトリでコマンドを実行する共通の入口、`git`は固定CommitからTask Mapを読む手段、`gh`はGitHub Issueを読み書きする手段である。
+
+### 問題
+
+従来の`scripts/task_issue_sync.rb`はRubyで記述されているが、このリポジトリはRubyの版や導入方法を固定していない。OS付属Rubyへの暗黙依存を残すと、将来同じ手順を実行できるかをリポジトリだけでは判断できない。
+
+### 承認された修正
+
+- 同期ツールをBashで記述した`scripts/task_issue_sync.sh`へ置換し、同値性確認後にRuby版を削除する。
+- JSONの解析には`jq`を使用する。外部ライブラリや製品CLIの実装言語は追加で決定しない。
+- Bash 3.2以上と`jq` 1.6以上を必須とする。これは、使用する正規表現、`scan`、`capture`、JSON変換の機能条件を固定し、実行環境の違いを開始時に検出するためである。
+- `--check`は固定Planning snapshotだけを検査し、`--render-connections`は現在のTask Mapから接続台帳を生成する。どちらもGitHubへ接続しない。
+- `--verify`は固定Planning snapshotとGitHub Issueを読み取って照合するが、書込みを行わない。
+- `--apply`だけがGitHub Issueの作成・自動生成領域の更新・Issue #1の子一覧更新を行う。自動Close、自動Reopen、自動削除は行わない。
+- 自動生成領域の外にある人手の進捗・Evidenceは保持し、管理Markerが欠落または重複している場合は書込み前に停止する。
+
+### 同値性の合格条件
+
+- 固定Planning snapshotから大分類6件、中分類19件、leaf 116件、合計141件を同じ条件で検査できる。
+- 現在のTask Mapから生成する直接接続306件、終端leaf 3件、明示Gate／Release 19件の全文が従来版と一致する。
+- 全141件のタイトル、本文、親子関係、依存区分、固定リンク、成果物Path、子Issue順を従来版と比較する。
+- leaf Task IDを親Task IDとして重複解釈しない。
+- GitHubへ書き込む`--apply`は、利用者が別途明示承認するまで実行しない。
+
+### 履歴の扱い
+
+決定038〜040にあるRuby版の記載は、当時そのツールでIssue #3〜#143を作成・検証した事実であるため変更しない。本決定以降の現行手順だけをBash版へ切り替える。
+
+### Owner境界とCommit
+
+本変更はplanning integration用ツールのOwner変更として扱い、Issue #28の論理スキーマ成果物およびプロジェクトSkillのCommitへ混在させない。Commit、push、PR、Issue更新、Mergeは、それぞれ利用者の明示承認を得た後に行う。
+
+### 承認記録
+
+- 2026-08-11: ユーザーがRuby版を残さず、シェルスクリプトで書くよう指示した。

@@ -47,10 +47,10 @@ Issue #1から分割したタスクの現在構造、状態、成果物、依存
 
 ## 現在位置
 
-- 現在の議論: 作成済みTask Issueの依存DAGに沿った実行管理
-- 現在の状態: 大分類6件、中分類19件、leaf 116件のGitHub Issue化と親子・依存関係の同期が完了
-- 直前の完了: 全141件のIssue作成、冪等再同期、全件整合性検証、Task IDとIssue番号の対応表作成
-- 次の議論: `L1-M1-S1`を起点とする設計タスクの着手
+- 現在の議論: `L1-M1-S1`の設計成果物を監査し、後続タスクへ引き継げる状態にする
+- 現在の状態: `L1-M1-S1`の論理スキーマを作成・再監査済みで、利用者によるCommit承認を待っている
+- 直前の完了: 8状態化、Scopeの結合規則、Evidenceの命題評価と利用者自己申告の分離を設計へ反映
+- 次の議論: 利用者の承認後に`L1-M1-S1`をCommitし、`L1-M1-S2`と`L1-M1-S3`へ引き継ぐ
 - GitHub Issue対応表: [`docs/github-issue-map.md`](github-issue-map.md)
 
 ## 階層マップ
@@ -215,9 +215,9 @@ L6 評価設計・横断品質保証を実装する [承認済み]
 
 | ID | タスク名 | 計画状態 | 実行状態 | 主成果物・到達状態 | 直接依存 |
 | --- | --- | --- | --- | --- | --- |
-| L1 | Knowledge論理モデル・CLI公開契約を設計する | 承認済み | 未着手 | Knowledge論理モデルとCLI公開契約・JSON Schema | なし |
-| L1-M1 | Knowledge論理データモデル・整合性制約を設計する | 承認済み | 未着手 | 実装可能で検索要件を満たす論理モデル | なし |
-| L1-M1-S1 | Knowledge論理スキーマを定義する | 承認済み | 未着手 | 全論理レコードのデータ辞書 | なし |
+| L1 | Knowledge論理モデル・CLI公開契約を設計する | 承認済み | 進行中 | Knowledge論理モデルとCLI公開契約・JSON Schema | なし |
+| L1-M1 | Knowledge論理データモデル・整合性制約を設計する | 承認済み | 進行中 | 実装可能で検索要件を満たす論理モデル | なし |
+| L1-M1-S1 | Knowledge論理スキーマを定義する | 承認済み | 進行中 | 全論理レコードのデータ辞書 | なし |
 | L1-M1-S2 | Knowledge論理関連と参照整合性制約を定義する | 承認済み | 未着手 | 関連種別・方向・多重度・参照整合性の制約表 | L1-M1-S1 |
 | L1-M1-S3 | Evidence由来Stateの整合性・導出契約を定義する | 承認済み | 未着手 | Evidence、導出結果、根拠追跡、再計算・無効化の契約 | L1-M1-S1 |
 | L1-M1-S4 | Knowledge更新操作の論理事前・事後条件と履歴系譜を定義する | 承認済み | 未着手 | 更新操作の遷移表と履歴系譜規則 | L1-M1-S2、L1-M1-S3 |
@@ -286,13 +286,13 @@ L6 評価設計・横断品質保証を実装する [承認済み]
 | L4-M2-S1 | 技術非依存な探索要求・Query Journey・局所停止理由を詳細設計する | 承認済み | 未着手 | 技術非依存な探索能力・遷移・必要取得情報・局所停止理由 | Issue、L1-M1、L1-M2 |
 | L4-M2-S2 | Article Claim受入・Target Claim分解／検索variant生成手順を詳細設計する | 承認済み | 未着手 | Claim受入・検索用部分Claim／variant生成手順 | L4-M2-S1、L4-M1-S4 |
 | L4-M2-S3 | CLI検索・取得Command Mappingと部分失敗引渡しを詳細設計する | 承認済み | 未着手 | Knowledge Search固有CLI Mapping・失敗引渡し契約 | L4-M2-S1・S2、L1-M2 |
-| L4-M2-S4 | Evidence意味比較・探索十分性／Knowledge Assessment判定手順を詳細設計する | 承認済み | 未着手 | Evidenceから7状態・Known・Gap・Confidenceを導く手順 | L4-M2-S1・S2、L1-M1 |
+| L4-M2-S4 | Evidence意味比較・探索十分性／Knowledge Assessment判定手順を詳細設計する | 承認済み | 未着手 | Evidenceから8状態・Known・Gap・Confidenceを導く手順 | L4-M2-S1・S2、L1-M1 |
 | L4-M2-S5 | Knowledge Assessment・raw Search Trace・局所再検索結果契約を定義する | 承認済み | 未着手 | Assessment・Trace・実行状態を分離した出力契約 | L4-M2-S1〜S4 |
 | L4-M2-S6 | Knowledge Search SkillをMock CLI契約に基づき実装し、固有構造契約を確認する | 承認済み | 未着手 | Mockで固有構造契約を確認済みのKnowledge Search Skill package | L4 Skill Design Freeze Gate |
 | L4-M2-S7 | Knowledge Search Skillを実CLI Artifactへ接続し、固有Command連携を確認する | 承認済み | 未着手 | Knowledge Search固有の実CLI Component連携 | L4-M2-S6、L2-M3-S5・S8。L4 ReleaseはL2-M3-S9後 |
 | L4-M3 | Reading Value Skillを詳細設計・実装する | 承認済み | 未着手 | Reading Value Skill、最終Assessment Markdown契約 | 設計着手: L1。契約確定: L4-M1・M2。本番実装: L4 Gate |
 | L4-M3-S1 | Article Analysis／Knowledge Search入力整合・評価可否境界を詳細設計する | 承認済み | 未着手 | M1・M2入力のClaim整合・評価可否境界 | L4-M1-S4、L4-M2-S5 |
-| L4-M3-S2 | Knowledge AssessmentからRecognition Gain Candidateへの適用手順を詳細設計する | 承認済み | 未着手 | 7状態を再判定しないRecognition Gain適用手順 | L4-M3-S1 |
+| L4-M3-S2 | Knowledge AssessmentからRecognition Gain Candidateへの適用手順を詳細設計する | 承認済み | 未着手 | 8状態を再判定しないRecognition Gain適用手順 | L4-M3-S1 |
 | L4-M3-S3 | Claim・記事内SupportからReliability／Applicabilityを判断する手順を詳細設計する | 承認済み | 未着手 | Supportに追跡可能なReliability・Applicability判断手順 | L4-M3-S1 |
 | L4-M3-S4 | Attention Cost・Claim横断統合によるRecommendation／読書範囲決定手順を詳細設計する | 承認済み | 未着手 | 3推奨と読書範囲のClaim横断統合手順 | L4-M3-S2・S3 |
 | L4-M3-S5 | 追加調査要求・Reading Value Assessment Markdown契約を定義する | 承認済み | 未着手 | 最終Assessment／追加調査要求の排他的出力契約 | L4-M3-S1・S4 |
@@ -671,7 +671,7 @@ M1〜M3完了 + L2-M3-S9 ─→ L4 Release
 ```
 
 - Gateは3 Skillの契約、状態、責務境界、CLI Mapping、Path Ownerを確定するMilestoneであり、独立Task IDを付けない。
-- GateではKnowledge Assessmentの7状態と、`complete / input_insufficient / incomplete / partial_failure`の探索実行状態を別軸として確定する。
+- GateではKnowledge Assessmentの8状態と、`complete / input_insufficient / incomplete / partial_failure`の探索実行状態を別軸として確定する。
 - L2実行ArtifactをGate条件に含めず、探索要求からL2を設計する依存との循環を防ぐ。
 - L4-M1〜M3は別Skill Directoryを所有し、Gate通過Commitから並行実装する。共有Registry・Orchestration・Trace相関はL5、共有評価資産はL6が所有する。
 - Merge順は`M1契約 → M2契約 → M3契約 → Gate → M1・M2 Mock・M3実装 → M2実CLI統合 → L4 Release`とする。
@@ -746,7 +746,7 @@ M1〜M3実装 + L2-M3-S9 → L4 Release
 #### 承認済み構造への修正（2026-08-11承認済み）
 
 1. L2-M2親の開始入力、L2-M2-S1の直接依存、L2 Design Freeze Gateの確認対象にある暫定前方参照を、`L4-M2-S1 / agentic-search-requirements.md`へ置換する。
-2. L4 Skill Design Freeze Gateへ、Knowledge Assessmentの7状態と、`complete / input_insufficient / incomplete / partial_failure`の探索実行状態を別軸で確定する条件を追加する。
+2. L4 Skill Design Freeze Gateへ、Knowledge Assessmentの8状態と、`complete / input_insufficient / incomplete / partial_failure`の探索実行状態を別軸で確定する条件を追加する。
 
 ### L4-M3内（2026-08-11承認済み）
 
@@ -774,7 +774,7 @@ L5統合・L6評価
 - S2はKnowledge Assessmentを再判定せずRecognition Gainへ適用し、S3は記事内SupportをReliability／Applicability判断へ適用する。
 - S4のAttention Costは既存入力から得られる定性的proxyを用い、新規の上流Field、精密な読了時間、単一スコアを前提にしない。
 - S5は`final_assessment`と`additional_research_request`を排他的に表現する。再調査のRouting、回数・Budget、再試行、相関、終了判定はL5が所有する。
-- L4 Skill Design Freeze Gateでは、Knowledge Assessmentの7状態と実行状態の直交、SupportとReliabilityの境界、3 Recommendationの固定、最終Assessmentと追加調査要求の排他性、Path Ownerを確定する。
+- L4 Skill Design Freeze Gateでは、Knowledge Assessmentの8状態と実行状態の直交、SupportとReliabilityの境界、3 Recommendationの固定、最終Assessmentと追加調査要求の排他性、Path Ownerを確定する。
 - Merge順は`L4-M1-S4・L4-M2-S5 → S1 → S2・S3 → S4 → S5 → L4 Gate → S6`とする。
 - S1〜S4は各設計File、S5はReading Value出力契約File、S6はS5契約File以外のReading Value Skill packageを単一Ownerとする。共有Registry・OrchestrationはL5、共有評価資産はL6が所有する。
 - Reading Value SkillはCLIを直接利用しないため、独立した技術選定、Mock CLI、実CLI統合タスクは追加しない。
