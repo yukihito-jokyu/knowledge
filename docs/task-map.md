@@ -47,10 +47,11 @@ Issue #1から分割したタスクの現在構造、状態、成果物、依存
 
 ## 現在位置
 
-- 現在の議論: 承認済みleafのGitHub Issue化
-- 現在の状態: L1〜L6の全階層、依存関係、Gate、worktree境界、およびL1・L2 Gate前設計成果物のPath／Ownerは承認済み
-- 直前の完了: GitHub Issue化に用いる成果物Path・Owner・接続台帳規則の承認
-- 次の議論: leaf Issueの作成順とGitHub Issue番号のTask Mapへの対応付け
+- 現在の議論: 作成済みTask Issueの依存DAGに沿った実行管理
+- 現在の状態: 大分類6件、中分類19件、leaf 116件のGitHub Issue化と親子・依存関係の同期が完了
+- 直前の完了: 全141件のIssue作成、冪等再同期、全件整合性検証、Task IDとIssue番号の対応表作成
+- 次の議論: `L1-M1-S1`を起点とする設計タスクの着手
+- GitHub Issue対応表: [`docs/github-issue-map.md`](github-issue-map.md)
 
 ## 階層マップ
 

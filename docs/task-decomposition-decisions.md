@@ -4329,3 +4329,31 @@ Issue作成前に、Task Map、決定記録、完成済み接続台帳、Issue�
 3. Ruby構文確認とPlanning snapshotからの141件抽出が成功する。
 4. GitHub上に同一Task ID MarkerまたはMarkerなし同名Issueが存在しない。
 5. 作成後の再同期が作成・更新0件となり、全件検証が成功する。
+
+---
+
+## 決定 040: 全TaskのGitHub Issue作成と同期検証
+
+- 状態: 完了
+- 対象: 大分類6件、中分類19件、leaf 116件、原典Issue #1
+- 日付: 2026-08-11
+
+### 実行結果
+
+- 専用ブランチ`planning/task-issues`を作成し、Planning snapshotを`9bf911b9122bf4ec51ec48312cc310de29bfcdff`へ固定した。
+- `L1`〜`L6`をIssue #3〜#8、中分類19件をIssue #9〜#27、leaf 116件をIssue #28〜#143として作成した。
+- 原典Issue #1へ6件の大分類Issueを接続した。既存Issue #2は変更していない。
+- 各IssueへTask ID、親Issue、子Issue、直接依存、Gate／Release区分、成果物Path／Owner、固定Snapshotリンクを同期した。
+- Gate／Releaseは成果物を持たないMilestoneとして扱い、独立Issueは作成していない。
+- Task IDとGitHub Issue番号の対応を`docs/github-issue-map.md`へ記録した。
+
+### 検証結果
+
+- 初回同期後: `VERIFY OK L=6 M=19 S=116 TOTAL=141`
+- 2回目の同期: 作成0件、更新0件、同じ全件検証に合格
+- 独立した`--verify`: `VERIFY OK L=6 M=19 S=116 TOTAL=141`
+- GitHub上のPlanning snapshot参照、親子関係、Task ID一意性、固定SHA、必須Sectionの整合を確認済み
+
+### 承認記録
+
+- 2026-08-11: ユーザーが専用ブランチの作成・push、`.codex/hooks.json`の追加コミット、および全141件のIssue作成を承認した。
