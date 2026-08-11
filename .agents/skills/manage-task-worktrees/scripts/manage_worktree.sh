@@ -185,8 +185,32 @@ gate_is_required() {
 find_dependency_commit() {
   dep_body_file="$1"
   sed -n '/human-progress:start/,/human-progress:end/p' "$dep_body_file" |
+    grep -Ei '^[-[:space:]]*(統合Commit|Merge commit)[[:space:]]*:' |
     grep -Eo '[0-9a-fA-F]{7,40}' |
-    tail -1 || true
+    head -1 || true
+}
+
+find_dependency_owner_commit() {
+  dep_body_file="$1"
+  base_sha="$2"
+  dep_owner_path="$(
+    awk -F '|' '
+      {
+        key=$2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+        if (key=="書込み可能なPath／Glob") {
+          value=$3
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+          gsub(/`/, "", value)
+          print value
+          exit
+        }
+      }
+    ' "$dep_body_file"
+  )"
+  [ -n "$dep_owner_path" ] || return 0
+  printf '%s\n' "$dep_owner_path" | grep -Eq '^[[:alnum:]_.\/-]+$' || return 0
+  git -C "$primary_root" log -1 --format='%H' "$base_sha" -- "$dep_owner_path" || true
 }
 
 validate_dependencies() {
@@ -210,9 +234,13 @@ validate_dependencies() {
     [ "$dep_state" = "CLOSED" ] || die "着手依存Issue #${dep_issue}が未完了です: $dep_state"
 
     dep_commit="$(find_dependency_commit "$dep_body_file")"
+    if [ -z "$dep_commit" ]; then
+      dep_commit="$(find_dependency_owner_commit "$dep_body_file" "$base_sha")"
+      [ -z "$dep_commit" ] || note "WARN: 依存Issue #${dep_issue}の統合Commit記録がないため、基準ref上のOwner成果物Commitを使用します: $dep_commit"
+    fi
     rm -f "$dep_body_file"
 
-    [ -n "$dep_commit" ] || die "依存Issue #${dep_issue}のhuman-progressに統合Commitがありません"
+    [ -n "$dep_commit" ] || die "依存Issue #${dep_issue}の統合Commit記録も、基準ref上のOwner成果物Commitも確認できません"
     git -C "$primary_root" cat-file -e "${dep_commit}^{commit}" 2>/dev/null ||
       die "依存Issue #${dep_issue}のCommitをlocalで解決できません: $dep_commit"
     git -C "$primary_root" merge-base --is-ancestor "$dep_commit" "$base_sha" ||
