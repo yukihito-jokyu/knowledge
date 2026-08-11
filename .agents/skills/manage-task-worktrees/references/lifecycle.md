@@ -34,7 +34,7 @@
 - 依存Taskを統合した専用integration refから開始する。
 - `origin/main`へ未統合だが、承認済みの共通起点Commitがある。
 
-依存Issueはclosedだけでは不十分である。Issueのhuman-progress領域に統合Commitを記録し、そのCommitが基準refに含まれることを確認する。
+依存Issueはclosedだけでは不十分である。まず基準refを更新し、依存成果物が実際に含まれるかをGit履歴で確認する。Issueのhuman-progress領域に統合Commitが記録されていれば、そのCommitが基準refに含まれることも確認する。記録が空欄・未実施のままでも、依存Issueがclosedで、単一のOwner Pathに対する成果物Commitを基準ref上で特定できる場合は、そのCommitを着手Evidenceとして使用し、Issue記録の同期漏れを警告する。Issue記録だけを根拠に、Git上で統合済みの依存を未統合と判定しない。
 
 Gate依存があるTaskは`--gate-commit <sha>`を指定する。スクリプトはGate Commitが基準refに含まれることを確認する。Gateの意味的な合格判定は行わない。
 
@@ -69,7 +69,7 @@ tracking Issueを指定された場合はworktreeを作成せず、次の順で�
 2. `Lx`または`Lx-My`の子を同じ方法で再帰的に辿り、`Lx-My-Sz`の子孫leafを列挙する。子IssueはIssue本文のgenerated領域にある「直下の子Issue」だけから辿る。
 3. 各子のTask ID、親ID、Planning snapshotが親および固定Task Mapと一致することを確認する。差異があれば開始しない。
 4. 固定Planning snapshotのTask Mapと接続台帳を読み、着手依存、完了・Merge依存、Gate、Owner Path、Merge順を復元する。現在のIssue本文だけから新しい依存を推測しない。
-5. 依存Issueの状態、human-progressの統合Commit、baseへの包含、Gate Commit、既存worktreeを確認し、現在開始できるleafをready frontierとする。
+5. 基準refを更新してから、依存Issueの状態、Git上の依存成果物Commitとbaseへの包含、human-progressの統合Commit、Gate Commit、既存worktreeを確認し、現在開始できるleafをready frontierとする。human-progressとGit履歴が食い違う場合はGitの包含関係を実態判定に使い、記録差異を別途警告する。
 6. ready frontier以降は、先行Taskの統合により解放される条件付きの将来waveとして示す。先行統合前に将来waveのbase SHAを確定しない。
 7. 現在waveの候補だけをユーザーへ提示し、選択後に各leafの`plan`を実行する。tracking Issueへ`plan`や`start`を実行しない。
 
@@ -205,7 +205,7 @@ rtk bash .agents/skills/manage-task-worktrees/scripts/manage_worktree.sh remove 
 
 - Issue Marker（実行対象Taskを識別するIssue本文の印）がない: tracking Issue（複数Taskの進捗だけをまとめる管理用Issue）の可能性があるため開始しない。実際の成果物を持たない親Issueで作業を始めないためである。
 - Task IDがleafでない: 親Taskは進捗管理用なので開始せず、「親Issueからleafへの展開」を実行する。
-- 依存Commitがない: 依存IssueへEvidenceを記録する。
+- 依存Commitがない: 最新の基準ref上でOwner成果物Commitを検索する。成果物が含まれていればそのCommitをEvidenceとして続行し、Issue記録の同期漏れを警告する。成果物も確認できない場合だけ開始を止める。
 - Gate Commitがない: Gate確認セッションへ戻る。
 - 基準refにCommitがない: integration順を修正し、refを更新する。
 - Pathが既に存在する: 登録済みworktreeとbranchを確認し、推測で削除しない。
