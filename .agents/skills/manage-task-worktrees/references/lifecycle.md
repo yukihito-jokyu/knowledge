@@ -7,6 +7,8 @@
 - `/.worktrees/`と`/.codex/task-session.local.md`が`.gitignore`に登録されている。
 - 実行対象は`Lx-My-Sz`形式のleaf Task Issueである。
 - 固定Planning snapshotのTask Mapと接続台帳を依存DAG・Gate・Ownerの正本とし、GitHub Issue本文を実行用の同期コピーとして照合する。差異があれば開始しない。
+- GitHub Issue本文のTask ID Marker（そのIssueが実行対象Taskであることを示す識別欄）を確認する。Task ID Markerは、進捗管理だけを行う親Issueを誤って実行しないために必要である。
+- 基準refと作成・再開するworktreeの双方に、`manage-task-worktrees`、`conduct-task-discussion`、`explain-with-context`の3つのSkillが存在する。開始プロンプトだけが存在し、実際の手順書を読めない状態を防ぐために必要である。
 
 ## 状態遷移
 
@@ -22,7 +24,7 @@
                                 └─ worktree削除済み
 ```
 
-`plan`と`status`はread-onlyである。`start`はbranch、worktree、ローカル引継ぎファイルを作成し、既定ではVS Codeを開く。`finish`は完了判定材料を表示するだけでCommitやpushを行わない。`remove`はMerge済みでcleanなworktreeだけを削除する。
+`plan`と`status`は読取り専用である。`start`はbranch（変更履歴の作業系列）、worktree（分離作業ディレクトリ）、ローカル引継ぎファイルを作成し、既定ではVS Codeを開く。既存worktreeを再開する場合は、質問・回答・判断履歴を上書きせず、不足する必須Skillの開始プロンプトだけを追記する。`finish`は完了判定材料を表示するだけでCommitやpushを行わない。`remove`はMerge済みで変更が残っていないworktreeだけを削除する。
 
 ## 基準ref
 
@@ -38,7 +40,7 @@ Gate依存があるTaskは`--gate-commit <sha>`を指定する。スクリプト
 
 ## 開始
 
-leaf Taskを直接指定された場合は、最初にdry-runする。
+leaf Taskを直接指定された場合は、最初にdry-run（worktreeを作らず開始条件だけを確認する試行）を行う。実際の作成前に、誤ったIssue、基準ref、依存関係を発見するために必要である。
 
 ```shell
 rtk bash .agents/skills/manage-task-worktrees/scripts/manage_worktree.sh plan 28
@@ -110,13 +112,20 @@ Wave 2は#28の統合Commit、Wave 6は#33の統合Commitをそれぞれ共通�
 
 複数leafをまとめて作る場合は、承認後にleafごとに`start --no-open`を実行し、必要なウィンドウだけ`open`してもよい。`start --no-open`もbranch、worktree、handoffを作成する変更操作である。後続waveは前提Merge後に再展開・再`plan`し、別途承認を得る。
 
+再開時に`.codex/task-session.local.md`が既にある場合、質問・回答・判断履歴を上書きしない。3つの必須Skillを指定する開始プロンプトがない場合だけ末尾へ追記する。worktree自体に必須Skillがない場合は、基準refをそのTask branchへ安全に統合するまで再開しない。
+
 ## 新しいCodexセッション
 
 VS Code内でCodexを手動開始し、次のように依頼する。
 
 ```text
-$manage-task-worktrees を使って .codex/task-session.local.md を読み、
-記載されたTask Issueだけを実行してください。
+$manage-task-worktrees、$conduct-task-discussion、$explain-with-context を使って
+.codex/task-session.local.md とTask Issueを読み、記載されたleaf Taskだけを実行してください。
+ユーザーへの返答と成果物では前提知識、用語の意味、各要素が必要な理由を省略しないでください。
+Commit前に別サブエージェントへ、Issue #1、直接の後続Issue、固定Planning snapshot、
+変更成果物の矛盾・欠落・説明不足をレビューさせ、修正指摘がなくなるまで対応してください。
+依存関係、Gate、成果物Ownerに差異があれば作業を止めて報告してください。
+ユーザーが明示的に承認するまでCommitしないでください。
 ```
 
 新しいセッションは、着手前に次を確認する。
@@ -126,6 +135,8 @@ $manage-task-worktrees を使って .codex/task-session.local.md を読み、
 3. HEADと引継ぎのworktree起点SHAが整合する。
 4. 書込みPathがIssueの単一Owner境界内である。
 5. 依存・GateのEvidenceが引継ぎとIssueに存在する。
+6. `$conduct-task-discussion` と `$explain-with-context` が開始プロンプトに明記されている。
+7. 固定版と現在の`docs/task-connections.md`、Issueが指定する決定記録から直接の後続Issueを特定できる。
 
 ## 並行作業
 
@@ -133,9 +144,9 @@ $manage-task-worktrees を使って .codex/task-session.local.md を読み、
 
 - branch名とworktree PathがTaskごとに一意である。
 - 書込みPath／Globが重ならない。
-- shared Registry、Lockfile、生成物、共通Fixtureは承認済み単一Ownerだけが変更する。
+- 共有Registry（複数Taskが利用する登録一覧）、Lockfile、生成物、共通Fixtureは承認済み単一Ownerだけが変更する。複数Taskによる同時変更と競合を防ぐためである。
 - Merge順があるTaskは、worktree作成を並行化しても確定・Mergeを直列化する。
-- 上流契約をconsumer側から変更しない。
+- 上流契約をconsumer（その契約を利用する側）のTaskから変更しない。契約を定義するTaskと利用するTaskの責任を混在させないためである。
 
 並行可能と提案するのは、次をすべて満たすTaskだけとする。
 
@@ -150,13 +161,21 @@ $manage-task-worktrees を使って .codex/task-session.local.md を読み、
 
 Path競合はスクリプトだけで完全判定しない。CodexがIssueの「成果物と所有」とTask Mapを読み、意味的に確認する。
 
-## 完了準備
+## Commit承認前の完了準備
 
 ```shell
 rtk bash .agents/skills/manage-task-worktrees/scripts/manage_worktree.sh finish 28
 ```
 
-出力されたbranch、HEAD、変更Path、Owner PathをIssueと照合する。その後、Task固有テストを実行し、ユーザーの依頼範囲に従ってCommit、push、PRを行う。
+出力されたbranch、HEAD、変更Path、Owner PathをIssueと照合する。その後、Task固有テストと別サブエージェントによる独立レビューを実行する。利用者が明示的に承認する前は、Commit候補への一時登録もCommitも行わない。
+
+## Commit承認後
+
+利用者が明示的に承認した変更だけを、成果物Ownerごとに分けてCommitする。push、PR作成、Issue更新はCommit承認と同一の操作ではないため、利用者の依頼範囲と外部操作の承認を別に確認する。
+
+## PR作成・統合後の記録
+
+PR作成やレビュー完了はMergeの承認ではない。利用者がMergeを明示的に承認するまでMergeせず、承認後にだけ実行する。
 
 Issueへ少なくとも次を記録する。
 
@@ -167,6 +186,8 @@ Issueへ少なくとも次を記録する。
 - 統合Commit
 - Gate／Releaseに渡すEvidence
 - 未解決事項の有無
+
+実施前の予定を完了証拠として記録しない。PRがMergeされた後に、実際の統合Commitを記録する。
 
 ## 削除
 
@@ -182,7 +203,7 @@ rtk bash .agents/skills/manage-task-worktrees/scripts/manage_worktree.sh remove 
 
 ## 障害時
 
-- Issue Markerがない: tracking Issueの可能性があるため開始しない。
+- Issue Marker（実行対象Taskを識別するIssue本文の印）がない: tracking Issue（複数Taskの進捗だけをまとめる管理用Issue）の可能性があるため開始しない。実際の成果物を持たない親Issueで作業を始めないためである。
 - Task IDがleafでない: 親Taskは進捗管理用なので開始せず、「親Issueからleafへの展開」を実行する。
 - 依存Commitがない: 依存IssueへEvidenceを記録する。
 - Gate Commitがない: Gate確認セッションへ戻る。

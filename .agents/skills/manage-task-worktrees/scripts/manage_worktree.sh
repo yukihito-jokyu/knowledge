@@ -4,6 +4,7 @@ set -euo pipefail
 PROGRAM_NAME="$(basename "$0")"
 SKILL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 HANDOFF_TEMPLATE="$SKILL_ROOT/references/session-handoff-template.md"
+REQUIRED_SKILLS_PROMPT_HEADING='## Codex開始プロンプト（必須3スキル・版1）'
 ISSUE_BODY_FILE=""
 
 cleanup() {
@@ -282,6 +283,28 @@ validate_ignore_rules() {
     die "基準refの.gitignoreに /.codex/task-session.local.md がありません"
 }
 
+validate_ref_required_skills() {
+  required_ref="$1"
+  required_ref_label="$2"
+  for required_skill in \
+    .agents/skills/manage-task-worktrees/SKILL.md \
+    .agents/skills/conduct-task-discussion/SKILL.md \
+    .agents/skills/explain-with-context/SKILL.md; do
+    git -C "$primary_root" cat-file -e "${required_ref}:${required_skill}" 2>/dev/null ||
+      die "${required_ref_label}にTask実行で必須のSkillがありません: $required_skill"
+  done
+}
+
+validate_worktree_required_skills() {
+  for required_skill in \
+    .agents/skills/manage-task-worktrees/SKILL.md \
+    .agents/skills/conduct-task-discussion/SKILL.md \
+    .agents/skills/explain-with-context/SKILL.md; do
+    [ -f "$worktree_path/$required_skill" ] ||
+      die "worktreeにTask実行で必須のSkillがありません。基準refを安全に統合してから再開してください: $required_skill"
+  done
+}
+
 registered_path_for_branch() {
   git -C "$primary_root" worktree list --porcelain |
     awk -v wanted="refs/heads/$branch_name" '
@@ -321,6 +344,33 @@ render_handoff() {
 
   git -C "$worktree_path" check-ignore -q --no-index .codex/task-session.local.md ||
     die "handoff fileがignoreされません: $handoff_path"
+
+  if [ -e "$handoff_path" ]; then
+    [ -f "$handoff_path" ] || die "handoff fileの配置先が通常ファイルではありません: $handoff_path"
+    if ! grep -Fxq "$REQUIRED_SKILLS_PROMPT_HEADING" "$handoff_path"; then
+      cat >>"$handoff_path" <<'HANDOFF_APPEND'
+
+## Codex開始プロンプト（必須3スキル・版1）
+
+既存の質問、回答、判断履歴を保持したまま、次の指示を追加する。
+
+```text
+$manage-task-worktrees、$conduct-task-discussion、$explain-with-context を使って
+.codex/task-session.local.md とTask Issueを読み、記載されたleaf Taskだけを実行してください。
+ユーザーへの返答と成果物では前提知識、用語の意味、各要素が必要な理由を省略しないでください。
+Commit前に別サブエージェントへ、Issue #1、直接の後続Issue、計画固定版と現在のTask Map・接続台帳、
+Issueが指定する決定記録、作業セッション、Git状態と差分、変更成果物を読取り専用で照合させ、
+矛盾・欠落・説明不足の修正指摘がなくなるまで対応してください。
+依存関係、Gate、成果物Ownerに差異があれば作業を止めて報告してください。
+ユーザーが明示的に承認するまでCommitしないでください。
+```
+HANDOFF_APPEND
+      note "UPDATED: 既存handoffの履歴を保持し、必須Skillの開始プロンプトを追記しました"
+    else
+      note "PRESERVED: 既存handoffと質問・回答・判断履歴を変更しません"
+    fi
+    return 0
+  fi
 
   safe_title="$(escape_awk_replacement "$issue_title")"
   safe_owner="$(escape_awk_replacement "$owner_paths")"
@@ -422,6 +472,7 @@ run_plan_or_start() {
   git -C "$primary_root" merge-base --is-ancestor "$planning_snapshot" "$base_sha" ||
     die "Planning snapshot $planning_snapshot が基準ref $base_ref に含まれていません"
 
+  validate_ref_required_skills "$base_sha" "基準ref"
   validate_ignore_rules
   validate_dependencies "$base_sha"
   validate_active_path_conflicts
@@ -451,19 +502,25 @@ run_plan_or_start() {
       die "配置先が既存の非worktree Pathです: $worktree_path"
     actual_branch="$(git -C "$worktree_path" branch --show-current)"
     [ "$actual_branch" = "$branch_name" ] || die "既存worktreeのbranchが一致しません: $actual_branch"
+    validate_ref_required_skills "$branch_name" "既存branch"
     note "RESUME: $worktree_path"
   else
-    mkdir -p "$worktree_root"
     if git -C "$primary_root" show-ref --verify --quiet "refs/heads/$branch_name"; then
+      validate_ref_required_skills "$branch_name" "既存branch"
+      mkdir -p "$worktree_root"
       git -C "$primary_root" worktree add "$worktree_path" "$branch_name"
     elif git -C "$primary_root" show-ref --verify --quiet "refs/remotes/origin/$branch_name"; then
+      validate_ref_required_skills "origin/$branch_name" "既存remote branch"
+      mkdir -p "$worktree_root"
       git -C "$primary_root" worktree add --track -b "$branch_name" "$worktree_path" "origin/$branch_name"
     else
+      mkdir -p "$worktree_root"
       git -C "$primary_root" worktree add -b "$branch_name" "$worktree_path" "$base_sha"
     fi
     note "CREATED: $worktree_path"
   fi
 
+  validate_worktree_required_skills
   render_handoff
   note "HANDOFF: $handoff_path"
 
@@ -502,6 +559,10 @@ run_open() {
   need_command code
   handoff_path="$worktree_path/.codex/task-session.local.md"
   [ -f "$handoff_path" ] || die "handoff fileがありません: $handoff_path"
+  actual_branch="$(git -C "$worktree_path" branch --show-current)"
+  [ "$actual_branch" = "$branch_name" ] || die "既存worktreeのbranchが一致しません: $actual_branch"
+  validate_worktree_required_skills
+  render_handoff
   code --new-window "$worktree_path" "$handoff_path"
 }
 
