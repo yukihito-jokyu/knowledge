@@ -46,7 +46,7 @@ leaf Taskを直接指定された場合は、最初にdry-run（worktreeを作�
 rtk bash .agents/skills/manage-task-worktrees/scripts/manage_worktree.sh plan 28
 ```
 
-表示内容を確認後、外部アクセスとGUI起動の承認を得て開始する。
+表示内容を確認後、worktree作成専用の承認待ちを挟まず開始する。利用者の実装・開始依頼を、依頼範囲内のworktree作成とVS Code起動の指示として扱う。外部アクセスやGUI起動で実行環境自体が権限確認を要求する場合だけ、その仕組みに従う。
 
 ```shell
 rtk bash .agents/skills/manage-task-worktrees/scripts/manage_worktree.sh start 28
@@ -71,7 +71,7 @@ tracking Issueを指定された場合はworktreeを作成せず、次の順で�
 4. 固定Planning snapshotのTask Mapと接続台帳を読み、着手依存、完了・Merge依存、Gate、Owner Path、Merge順を復元する。現在のIssue本文だけから新しい依存を推測しない。
 5. 基準refを更新してから、依存Issueの状態、Git上の依存成果物Commitとbaseへの包含、human-progressの統合Commit、Gate Commit、既存worktreeを確認し、現在開始できるleafをready frontierとする。human-progressとGit履歴が食い違う場合はGitの包含関係を実態判定に使い、記録差異を別途警告する。
 6. ready frontier以降は、先行Taskの統合により解放される条件付きの将来waveとして示す。先行統合前に将来waveのbase SHAを確定しない。
-7. 現在waveの候補だけをユーザーへ提示し、選択後に各leafの`plan`を実行する。tracking Issueへ`plan`や`start`を実行しない。
+7. 現在waveの候補だけをユーザーへ提示し、実装・開始依頼の範囲に含まれる各leafの`plan`を実行する。対象が依頼から一意に定まる場合は選択待ちを挟まない。tracking Issueへ`plan`や`start`を実行しない。
 
 提示表には次を含める。
 
@@ -100,9 +100,9 @@ Wave 9: #38
 
 Wave 2は#28の統合Commit、Wave 6は#33の統合Commitをそれぞれ共通起点にでき、各組のOwner Pathが分離されているため並行可能である。各組内のMerge順は任意だが、両Taskを統合したCommitを次waveのbaseにする。それ以外は直接依存DAGに従って直列化する。
 
-## waveの承認と作成
+## waveの作成
 
-現在waveの全leafで`plan`が合格したら、次をまとめて提示して承認を得る。
+現在waveの全leafで`plan`が合格したら、次をまとめて提示し、worktree作成専用の承認待ちを挟まず`start`へ進む。
 
 - branch、worktree、handoff
 - base ref／SHA、依存統合Commit、Gate Commit
@@ -110,7 +110,7 @@ Wave 2は#28の統合Commit、Wave 6は#33の統合Commitをそれぞれ共通�
 - 並行可能な組、直列化理由、Merge順、次waveの解放条件
 - GitHubアクセス、fetch、ローカル作成、VS Code起動の有無
 
-複数leafをまとめて作る場合は、承認後にleafごとに`start --no-open`を実行し、必要なウィンドウだけ`open`してもよい。`start --no-open`もbranch、worktree、handoffを作成する変更操作である。後続waveは前提Merge後に再展開・再`plan`し、別途承認を得る。
+複数leafをまとめて作る場合は、leafごとに`start --no-open`を実行し、必要なウィンドウだけ`open`してもよい。`start --no-open`もbranch、worktree、handoffを作成する変更操作である。後続waveは前提Merge後に再展開・再`plan`し、元の実装・開始依頼の範囲内なら新たなworktree作成承認を求めずに進める。
 
 再開時に`.codex/task-session.local.md`が既にある場合、質問・回答・判断履歴を上書きしない。3つの必須Skillを指定する開始プロンプトがない場合だけ末尾へ追記する。worktree自体に必須Skillがない場合は、基準refをそのTask branchへ安全に統合するまで再開しない。
 
@@ -171,9 +171,13 @@ rtk bash .agents/skills/manage-task-worktrees/scripts/manage_worktree.sh finish 
 
 ## Commit承認後
 
-利用者が明示的に承認した変更だけを、成果物Ownerごとに分けてCommitする。push、PR作成、Issue更新はCommit承認と同一の操作ではないため、利用者の依頼範囲と外部操作の承認を別に確認する。
+利用者がCommitを明示的に承認した後、Commit操作へ進む時点で`.agents/skills/commit/SKILL.md`を全文読み、`commit` Skillを必ず使用する。Skillの全文確認は、Commitメッセージ、一時登録、Commit粒度など、Commit専用の詳細規則を漏れなく適用するために必要である。利用者が明示的に承認した変更だけを、成果物Ownerごとに分けてCommitする。明示承認前はCommit候補への一時登録もCommitも行わない。
+
+push、PR作成、Issue更新はCommit承認と同一の操作ではないため、利用者の依頼範囲と外部操作の承認を別に確認する。
 
 ## PR作成・統合後の記録
+
+PR（Pull Request、変更を共有リポジトリへ取り込むための確認依頼）の作成はCommit承認とは別の外部変更である。利用者がPR作成を依頼・承認した時点で`.agents/skills/pr/SKILL.md`を全文読み、`pr` Skillを必ず使用する。Skillの全文確認は、PR本文、テンプレート、Issueとの関連付けなど、PR専用の詳細規則を漏れなく適用するために必要である。
 
 PR作成やレビュー完了はMergeの承認ではない。利用者がMergeを明示的に承認するまでMergeせず、承認後にだけ実行する。
 

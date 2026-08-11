@@ -28,13 +28,14 @@ Task Issueを1つのブランチ、worktree、VS Codeウィンドウ、Codexセ�
 1. 変更操作の前に[ライフサイクル](references/lifecycle.md)を全文読む。
 2. 指定Issueがtracking Taskなら、`plan`や`start`を実行せず、Issue本文と固定Planning snapshotから子孫leafを再帰的に展開する。
 3. leafの依存DAG、Gate、基準ref、Owner Path、既存worktreeを照合し、現在のready frontierと将来waveをユーザーへ提案する。
-4. ユーザーが選んだ現在waveの各leafについてPrimary checkoutから `plan` を実行する。機械判定に加え、複雑Globと共有資産のPath競合を意味的に監査する。
-5. wave全体の作成内容、並行・直列理由、Merge順、外部操作を示し、必要な承認を得てから各leafの `start` を実行する。後続waveへ承認を持ち越さない。
+4. 利用者の実装・開始依頼の範囲に含まれる現在waveの各leafについてPrimary checkoutから `plan` を実行する。対象が依頼から一意に定まる場合は選択待ちを挟まない。機械判定に加え、複雑Globと共有資産のPath競合を意味的に監査する。
+5. wave全体の作成内容、並行・直列理由、Merge順、外部操作を示し、`plan`合格後はworktree作成専用の承認待ちを挟まず各leafの `start` を実行する。利用者の実装・開始依頼を、依頼範囲内のworktree作成とVS Code起動の指示として扱う。
 6. VS Codeが開いたら、ユーザーへ各ウィンドウでCodexの開始と引継ぎファイルの読込みを依頼する。生成された開始プロンプトでは `$conduct-task-discussion` と `$explain-with-context` も必ず指定する。
 7. 作業完了時は `finish`、Issue固有の検証、別サブエージェントの独立レビューを実行する。利用者の明示承認前はCommit候補への一時登録もCommitも行わない。
-8. Commit承認後は成果物OwnerごとにCommitを分ける。push、PR作成、Issue更新は、利用者の依頼範囲と外部操作の承認を確認してから行う。
-9. Mergeは、PR作成とは別の外部変更である。利用者がMergeを明示的に承認するまで実行せず、PR作成やレビュー完了をMerge承認と解釈しない。
-10. Merge後に限り、明示承認を得て `remove` を実行する。
+8. Commit承認後にCommit操作へ進む時点で、`.agents/skills/commit/SKILL.md`を全文読み、`commit` Skillを必ず使用する。Commitの詳細規則を漏れなく適用したうえで、成果物OwnerごとにCommitを分けるために必要である。
+9. PR作成はCommit承認とは別の外部変更である。PR作成が利用者から依頼・承認された時点で、`.agents/skills/pr/SKILL.md`を全文読み、`pr` Skillを必ず使用する。push、PR作成、Issue更新は、利用者の依頼範囲と外部操作の承認をそれぞれ確認してから行う。
+10. Mergeは、PR作成とは別の外部変更である。利用者がMergeを明示的に承認するまで実行せず、PR作成やレビュー完了をMerge承認と解釈しない。
+11. Merge後に限り、明示承認を得て `remove` を実行する。
 
 GitHub Issue、ネットワーク、GUI、push、PR、削除を伴う操作では、それぞれ既存の承認規則に従う。
 
@@ -46,7 +47,7 @@ GitHub Issue、ネットワーク、GUI、push、PR、削除を伴う操作で�
 - 各leafのIssue、Task ID、依存Evidence、Gate、Owner Path、base ref／SHA
 - 並行可能な組、直列化する理由、Merge順、次waveの解放条件
 
-将来waveのbase SHAは先行Taskの統合前に確定しない。tracking Issue自身へ `start` を実行せず、ユーザーが承認した現在waveのleafだけを `plan`、`start` する。
+将来waveのbase SHAは先行Taskの統合前に確定しない。tracking Issue自身へ `start` を実行せず、利用者の実装・開始依頼の範囲に含まれる現在waveのleafだけを `plan`、`start` する。
 
 ## コマンド
 
