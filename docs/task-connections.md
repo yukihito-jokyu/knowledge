@@ -24,7 +24,10 @@
 - `L3-M2-S2 → L2-M2-S1`はTask Mapに明記された順方向のGate入力として記録する。
 - 後続利用者がないleafは終端leaf表へ明記する。
 - planning integration ownerだけが更新し、各worktreeはread-onlyで利用する。
-- 再生成: `ruby scripts/task_issue_sync.rb --render-connections`
+- 再生成: `rtk bash scripts/task_issue_sync.sh --render-connections`
+- `task_issue_sync.sh`は製品本体ではなく、Task Mapからこの接続台帳を再生成し、GitHub Task Issueとの一致を検査する計画管理用ツールである。
+- 実行にはBash 3.2以上と`jq` 1.6以上を使う。Bashは処理順と失敗時の停止を制御し、`jq`は改行や記号を含むJSONを項目単位で安全に読み取るために必要である。スクリプトは実行前に両者の版を検査する。
+- この再生成方式はローカル文書だけを読み、GitHubへの接続・書込みを行わない。
 
 ## 直接接続台帳
 
@@ -182,7 +185,7 @@
 | L4-M2-S2 | L5-M2-S2 | Claim受入・検索用部分Claim／variant生成手順 | 着手 | read-only | — | Task Map「L4-M2内」 |
 | L4-M2-S2 | L6-M3-S6 | Claim受入・検索用部分Claim／variant生成手順 | 着手 | read-only | — | Task Map「L4-M2内」 |
 | L4-M2-S3 | L4-M2-S5 | Knowledge Search固有CLI Mapping・失敗引渡し契約 | 着手 | read-only | — | Task Map「L4-M2内」 |
-| L4-M2-S4 | L4-M2-S5 | Evidenceから7状態・Known・Gap・Confidenceを導く手順 | 着手 | read-only | — | Task Map「L4-M2内」 |
+| L4-M2-S4 | L4-M2-S5 | Evidenceから8状態・Known・Gap・Confidenceを導く手順 | 着手 | read-only | — | Task Map「L4-M2内」 |
 | L4-M2-S5 | L4-M3-S1 | Assessment・Trace・実行状態を分離した出力契約 | 着手 | read-only | — | Task Map「L4-M2内」 |
 | L4-M2-S5 | L5-M1-S2 | Assessment・Trace・実行状態を分離した出力契約 | 着手 | read-only | — | Task Map「L4-M2内」 |
 | L4-M2-S5 | L5-M1-S4 | Assessment・Trace・実行状態を分離した出力契約 | 着手 | read-only | — | Task Map「L4-M2内」 |
@@ -197,7 +200,7 @@
 | L4-M3-S1 | L4-M3-S5 | M1・M2入力のClaim整合・評価可否境界 | 着手 | read-only | — | Task Map「L4-M3内」 |
 | L4-M3-S1 | L5-M2-S3 | M1・M2入力のClaim整合・評価可否境界 | 着手 | read-only | — | Task Map「L4-M3内」 |
 | L4-M3-S1 | L6-M3-S6 | M1・M2入力のClaim整合・評価可否境界 | 着手 | read-only | — | Task Map「L4-M3内」 |
-| L4-M3-S2 | L4-M3-S4 | 7状態を再判定しないRecognition Gain適用手順 | 着手 | read-only | — | Task Map「L4-M3内」 |
+| L4-M3-S2 | L4-M3-S4 | 8状態を再判定しないRecognition Gain適用手順 | 着手 | read-only | — | Task Map「L4-M3内」 |
 | L4-M3-S3 | L4-M3-S4 | Supportに追跡可能なReliability・Applicability判断手順 | 着手 | read-only | — | Task Map「L4-M3内」 |
 | L4-M3-S4 | L4-M3-S5 | 3推奨と読書範囲のClaim横断統合手順 | 着手 | read-only | — | Task Map「L4-M3内」 |
 | L4-M3-S5 | L5-M1-S2 | 最終Assessment／追加調査要求の排他的出力契約 | 着手 | read-only | — | Task Map「L4-M3内」 |
