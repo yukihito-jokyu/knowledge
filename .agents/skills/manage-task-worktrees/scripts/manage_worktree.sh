@@ -89,7 +89,7 @@ load_issue() {
   ISSUE_BODY_FILE="$(mktemp "${TMPDIR:-/tmp}/manage-task-worktrees.XXXXXX")"
 
   gh issue view "$issue_number" --repo "$repo_slug" --json body --jq .body >"$ISSUE_BODY_FILE" ||
-    die "Issue #$issue_numberを取得できません"
+    die "Issue #${issue_number}を取得できません"
   issue_title="$(gh issue view "$issue_number" --repo "$repo_slug" --json title --jq .title)"
   issue_state="$(gh issue view "$issue_number" --repo "$repo_slug" --json state --jq .state)"
   issue_url="$(gh issue view "$issue_number" --repo "$repo_slug" --json url --jq .url)"
@@ -99,9 +99,9 @@ load_issue() {
       head -1 |
       awk '{print $2}'
   )"
-  [ -n "$task_id" ] || die "Issue #$issue_numberにTask ID Markerがありません"
+  [ -n "$task_id" ] || die "Issue #${issue_number}にTask ID Markerがありません"
   printf '%s\n' "$task_id" | grep -Eq '^L[0-9]+-M[0-9]+-S[0-9]+$' ||
-    die "Issue #$issue_numberはleaf Taskではありません: $task_id"
+    die "Issue #${issue_number}はtracking Taskです: ${task_id}。親Issueからleafへの展開手順に従ってください"
 
   task_slug="$(printf '%s' "$task_id" | tr '[:upper:]' '[:lower:]')"
   branch_name="task/issue-${issue_number}-${task_slug}"
@@ -111,7 +111,7 @@ load_issue() {
     sed -nE 's/.*planning-snapshot: ([0-9a-f]{40}).*/\1/p' "$ISSUE_BODY_FILE" |
       head -1
   )"
-  [ -n "$planning_snapshot" ] || die "Issue #$issue_numberにPlanning snapshot SHAがありません"
+  [ -n "$planning_snapshot" ] || die "Issue #${issue_number}にPlanning snapshot SHAがありません"
 
   owner_paths="$(
     awk -F '|' '
@@ -127,7 +127,7 @@ load_issue() {
       }
     ' "$ISSUE_BODY_FILE"
   )"
-  [ -n "$owner_paths" ] || die "Issue #$issue_numberに書込み可能なPath／Globがありません"
+  [ -n "$owner_paths" ] || die "Issue #${issue_number}に書込み可能なPath／Globがありません"
   if printf '%s\n' "$owner_paths" | grep -Eq 'TBD|未確定'; then
     die "書込み可能なPath／Globに未解決TBDがあります: $owner_paths"
   fi
@@ -145,9 +145,24 @@ dependency_rows() {
 
 dependency_issue_numbers() {
   dependency_rows |
-    grep -Eo '/issues/[0-9]+' |
-    sed 's#.*/##' |
+    grep -Eo '(/issues/[0-9]+|#[0-9]+)' |
+    sed -E 's#.*/##; s/^#//' |
     sort -nu || true
+}
+
+task_id_from_file() {
+  grep -Eo 'knowledge-task-id: L[0-9]+(-M[0-9]+)?(-S[0-9]+)?' "$1" |
+    head -1 |
+    awk '{print $2}'
+}
+
+is_ancestor_task() {
+  ancestor_task_id="$1"
+  descendant_task_id="$2"
+  case "$descendant_task_id" in
+    "${ancestor_task_id}-"*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 gate_is_required() {
@@ -176,25 +191,84 @@ find_dependency_commit() {
 validate_dependencies() {
   base_sha="$1"
   dependency_summary=""
+  tracking_context_summary=""
 
   for dep_issue in $(dependency_issue_numbers); do
-    dep_state="$(gh issue view "$dep_issue" --repo "$repo_slug" --json state --jq .state)"
-    [ "$dep_state" = "CLOSED" ] || die "着手依存Issue #$dep_issueが未完了です: $dep_state"
-
     dep_body_file="$(mktemp "${TMPDIR:-/tmp}/manage-task-dependency.XXXXXX")"
     gh issue view "$dep_issue" --repo "$repo_slug" --json body --jq .body >"$dep_body_file"
+    dep_task_id="$(task_id_from_file "$dep_body_file")"
+    [ -n "$dep_task_id" ] || die "依存Issue #${dep_issue}にTask ID Markerがありません"
+
+    if is_ancestor_task "$dep_task_id" "$task_id"; then
+      tracking_context_summary="${tracking_context_summary}#${dep_issue}:${dep_task_id} "
+      rm -f "$dep_body_file"
+      continue
+    fi
+
+    dep_state="$(gh issue view "$dep_issue" --repo "$repo_slug" --json state --jq .state)"
+    [ "$dep_state" = "CLOSED" ] || die "着手依存Issue #${dep_issue}が未完了です: $dep_state"
+
     dep_commit="$(find_dependency_commit "$dep_body_file")"
     rm -f "$dep_body_file"
 
-    [ -n "$dep_commit" ] || die "依存Issue #$dep_issueのhuman-progressに統合Commitがありません"
+    [ -n "$dep_commit" ] || die "依存Issue #${dep_issue}のhuman-progressに統合Commitがありません"
     git -C "$primary_root" cat-file -e "${dep_commit}^{commit}" 2>/dev/null ||
-      die "依存Issue #$dep_issueのCommitをlocalで解決できません: $dep_commit"
+      die "依存Issue #${dep_issue}のCommitをlocalで解決できません: $dep_commit"
     git -C "$primary_root" merge-base --is-ancestor "$dep_commit" "$base_sha" ||
-      die "依存Issue #$dep_issueのCommit $dep_commit が基準refに含まれていません"
+      die "依存Issue #${dep_issue}のCommit $dep_commit が基準refに含まれていません"
     dependency_summary="${dependency_summary}#${dep_issue}:${dep_commit} "
   done
 
   [ -n "$dependency_summary" ] || dependency_summary="該当なし"
+  [ -n "$tracking_context_summary" ] || tracking_context_summary="該当なし"
+}
+
+owner_path_lines() {
+  raw_owner_paths="$1"
+  raw_owner_paths="${raw_owner_paths//\`/}"
+  raw_owner_paths="${raw_owner_paths//、/$'\n'}"
+  raw_owner_paths="${raw_owner_paths//,/$'\n'}"
+  printf '%s\n' "$raw_owner_paths" |
+    sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' |
+    sed '/^$/d'
+}
+
+simple_owner_path() {
+  printf '%s\n' "$1" | grep -Eq '^[[:alnum:]_.\/-]+(/\*\*)?$'
+}
+
+simple_paths_overlap() {
+  first_path="$1"
+  second_path="$2"
+  simple_owner_path "$first_path" && simple_owner_path "$second_path" || return 2
+
+  first_base="${first_path%/\*\*}"
+  second_base="${second_path%/\*\*}"
+  [ "$first_base" = "$second_base" ] && return 0
+  case "$first_base" in "$second_base"/*) return 0 ;; esac
+  case "$second_base" in "$first_base"/*) return 0 ;; esac
+  return 1
+}
+
+validate_active_path_conflicts() {
+  path_audit_summary="機械判定合格。複雑Globと共有資産は手動確認が必要"
+
+  while IFS= read -r active_worktree; do
+    [ "$active_worktree" = "$primary_root" ] && continue
+    [ "$active_worktree" = "$worktree_path" ] && continue
+    active_handoff="$active_worktree/.codex/task-session.local.md"
+    [ -f "$active_handoff" ] || continue
+    active_owner_paths="$(sed -n 's/^- 書込み可能なPath／Glob: //p' "$active_handoff" | head -1)"
+    [ -n "$active_owner_paths" ] || continue
+
+    while IFS= read -r candidate_path; do
+      while IFS= read -r active_path; do
+        if simple_paths_overlap "$candidate_path" "$active_path"; then
+          die "既存worktreeとOwner Pathが競合します: $candidate_path <-> $active_path ($active_worktree)"
+        fi
+      done < <(owner_path_lines "$active_owner_paths")
+    done < <(owner_path_lines "$owner_paths")
+  done < <(git -C "$primary_root" worktree list --porcelain | sed -n 's/^worktree //p')
 }
 
 validate_ignore_rules() {
@@ -227,9 +301,11 @@ print_plan() {
   note "Base SHA:   $base_sha"
   note "Gate SHA:   ${gate_commit:-該当なし}"
   note "Depends:    $dependency_summary"
+  note "Context:    $tracking_context_summary"
   note "Branch:     $branch_name"
   note "Worktree:   $worktree_path"
   note "Owner:      $owner_paths"
+  note "Path audit: $path_audit_summary"
   note "Snapshot:   $planning_snapshot"
 }
 
@@ -332,7 +408,7 @@ run_plan_or_start() {
   init_repository
   require_primary_checkout
   load_issue "$issue_arg"
-  [ "$issue_state" = "OPEN" ] || die "Issue #$issue_numberはOPENではありません: $issue_state"
+  [ "$issue_state" = "OPEN" ] || die "Issue #${issue_number}はOPENではありません: $issue_state"
 
   if [ "$fetch_requested" = true ]; then
     git -C "$primary_root" fetch --prune origin
@@ -341,8 +417,14 @@ run_plan_or_start() {
   base_sha="$(git -C "$primary_root" rev-parse --verify "${base_ref}^{commit}" 2>/dev/null)" ||
     die "基準refを解決できません: $base_ref"
 
+  git -C "$primary_root" cat-file -e "${planning_snapshot}^{commit}" 2>/dev/null ||
+    die "Planning snapshotをlocalで解決できません: $planning_snapshot"
+  git -C "$primary_root" merge-base --is-ancestor "$planning_snapshot" "$base_sha" ||
+    die "Planning snapshot $planning_snapshot が基準ref $base_ref に含まれていません"
+
   validate_ignore_rules
   validate_dependencies "$base_sha"
+  validate_active_path_conflicts
 
   if gate_is_required; then
     [ -n "$gate_commit" ] || die "Gate通過依存があります。--gate-commit <sha>を指定してください"
@@ -361,7 +443,7 @@ run_plan_or_start() {
 
   existing_branch_path="$(registered_path_for_branch)"
   if [ -n "$existing_branch_path" ] && [ "$existing_branch_path" != "$worktree_path" ]; then
-    die "$branch_nameは別worktreeで使用中です: $existing_branch_path"
+    die "${branch_name}は別worktreeで使用中です: $existing_branch_path"
   fi
 
   if [ -e "$worktree_path" ]; then

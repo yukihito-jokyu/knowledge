@@ -6,7 +6,7 @@
 - `git`、`gh`、`code`を利用でき、`gh auth status`が成功する。
 - `/.worktrees/`と`/.codex/task-session.local.md`が`.gitignore`に登録されている。
 - 実行対象は`Lx-My-Sz`形式のleaf Task Issueである。
-- GitHub Issue本文のTask ID Marker、依存表、成果物Ownerを正本として読む。
+- 固定Planning snapshotのTask Mapと接続台帳を依存DAG・Gate・Ownerの正本とし、GitHub Issue本文を実行用の同期コピーとして照合する。差異があれば開始しない。
 
 ## 状態遷移
 
@@ -38,7 +38,7 @@ Gate依存があるTaskは`--gate-commit <sha>`を指定する。スクリプト
 
 ## 開始
 
-最初にdry-runする。
+leaf Taskを直接指定された場合は、最初にdry-runする。
 
 ```shell
 rtk bash .agents/skills/manage-task-worktrees/scripts/manage_worktree.sh plan 28
@@ -58,6 +58,57 @@ rtk bash .agents/skills/manage-task-worktrees/scripts/manage_worktree.sh open 28
 ```
 
 同じTaskのbranchとworktreeが正しく存在する場合、`start`は破壊せず再開として扱う。別Pathで同じbranchがcheckoutされている場合は停止する。
+
+## 親Issueからleafへの展開
+
+tracking Issueを指定された場合はworktreeを作成せず、次の順で実行候補を解決する。
+
+1. 指定IssueのTask ID、Planning snapshot、直下の子Issueを読む。
+2. `Lx`または`Lx-My`の子を同じ方法で再帰的に辿り、`Lx-My-Sz`の子孫leafを列挙する。子IssueはIssue本文のgenerated領域にある「直下の子Issue」だけから辿る。
+3. 各子のTask ID、親ID、Planning snapshotが親および固定Task Mapと一致することを確認する。差異があれば開始しない。
+4. 固定Planning snapshotのTask Mapと接続台帳を読み、着手依存、完了・Merge依存、Gate、Owner Path、Merge順を復元する。現在のIssue本文だけから新しい依存を推測しない。
+5. 依存Issueの状態、human-progressの統合Commit、baseへの包含、Gate Commit、既存worktreeを確認し、現在開始できるleafをready frontierとする。
+6. ready frontier以降は、先行Taskの統合により解放される条件付きの将来waveとして示す。先行統合前に将来waveのbase SHAを確定しない。
+7. 現在waveの候補だけをユーザーへ提示し、選択後に各leafの`plan`を実行する。tracking Issueへ`plan`や`start`を実行しない。
+
+提示表には次を含める。
+
+| 項目 | 内容 |
+| --- | --- |
+| Task | Issue番号、Task ID、Task名 |
+| Ready | 現在開始可能か、未充足条件 |
+| Evidence | 依存Issue、統合Commit、Gate Commit |
+| Base | base ref／SHA。将来waveは解放条件だけを示す |
+| Owner | 書込みPath／Glob、共有資産Owner |
+| Execution | 並行可能Task、直列化理由、Merge順、次wave解放条件 |
+
+Issue #3のPlanning snapshot `9bf911b9122bf4ec51ec48312cc310de29bfcdff`では、次のwaveになる。これは動線例であり、実行時は必ずIssueと固定snapshotを再取得する。
+
+```text
+Wave 1: #28
+Wave 2: #29 + #30
+Wave 3: #31
+Wave 4: #32
+Wave 5: #33
+Wave 6: #34 + #35
+Wave 7: #36
+Wave 8: #37
+Wave 9: #38
+```
+
+Wave 2は#28の統合Commit、Wave 6は#33の統合Commitをそれぞれ共通起点にでき、各組のOwner Pathが分離されているため並行可能である。各組内のMerge順は任意だが、両Taskを統合したCommitを次waveのbaseにする。それ以外は直接依存DAGに従って直列化する。
+
+## waveの承認と作成
+
+現在waveの全leafで`plan`が合格したら、次をまとめて提示して承認を得る。
+
+- branch、worktree、handoff
+- base ref／SHA、依存統合Commit、Gate Commit
+- Owner Path、共有資産、既存worktreeとの競合監査結果
+- 並行可能な組、直列化理由、Merge順、次waveの解放条件
+- GitHubアクセス、fetch、ローカル作成、VS Code起動の有無
+
+複数leafをまとめて作る場合は、承認後にleafごとに`start --no-open`を実行し、必要なウィンドウだけ`open`してもよい。`start --no-open`もbranch、worktree、handoffを作成する変更操作である。後続waveは前提Merge後に再展開・再`plan`し、別途承認を得る。
 
 ## 新しいCodexセッション
 
@@ -85,6 +136,17 @@ $manage-task-worktrees を使って .codex/task-session.local.md を読み、
 - shared Registry、Lockfile、生成物、共通Fixtureは承認済み単一Ownerだけが変更する。
 - Merge順があるTaskは、worktree作成を並行化しても確定・Mergeを直列化する。
 - 上流契約をconsumer側から変更しない。
+
+並行可能と提案するのは、次をすべて満たすTaskだけとする。
+
+- Task間に着手依存辺がない。
+- 同じ依存統合CommitとGate Commitを共通起点にできる。
+- Owner Path／Globが交差しない。
+- Schema、Migration、共通Interface、Registry、DI、Lockfile、生成物、共有Fixtureが単一Ownerまたはread-onlyである。
+- 各leafの`plan`が個別に合格する。
+- Merge順と、全Taskを統合した次waveのbase作成条件が確定している。
+
+スクリプトは正規化可能な完全一致、親子Path、単純な`/**` prefixを既存worktreeと比較する。複雑Glob、除外規則、共有資産の意味的な競合は完全判定できないため、Codexが候補wave内と既存worktreeを横断監査する。自動検査合格を「競合なし」の根拠にしない。
 
 Path競合はスクリプトだけで完全判定しない。CodexがIssueの「成果物と所有」とTask Mapを読み、意味的に確認する。
 
@@ -121,10 +183,9 @@ rtk bash .agents/skills/manage-task-worktrees/scripts/manage_worktree.sh remove 
 ## 障害時
 
 - Issue Markerがない: tracking Issueの可能性があるため開始しない。
-- Task IDがleafでない: 親Taskは進捗管理用なので開始しない。
+- Task IDがleafでない: 親Taskは進捗管理用なので開始せず、「親Issueからleafへの展開」を実行する。
 - 依存Commitがない: 依存IssueへEvidenceを記録する。
 - Gate Commitがない: Gate確認セッションへ戻る。
 - 基準refにCommitがない: integration順を修正し、refを更新する。
 - Pathが既に存在する: 登録済みworktreeとbranchを確認し、推測で削除しない。
 - `code`がない: `start --no-open`を使用し、利用可能なVS Code起動方法をユーザーと決める。
-
