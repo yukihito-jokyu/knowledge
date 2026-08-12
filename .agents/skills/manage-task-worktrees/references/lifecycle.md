@@ -7,7 +7,7 @@
 - `/.worktrees/`と`/.codex/task-session.local.md`が`.gitignore`に登録されている。
 - 実行対象は`Lx-My-Sz`形式のleaf Task Issueである。
 - 固定Planning snapshotのTask Mapと接続台帳を依存DAG・Gate・Ownerの正本とし、GitHub Issue本文を実行用の同期コピーとして照合する。作業セッション、利用者が提示したIssue本文、又は既に取得して記録したIssue本文で必要なTask ID Marker（実行対象Taskを識別する印）、Owner、依存、完了条件を確認できる場合、GitHub APIで同じIssueを再読取りしない。API読取りは、ローカル資料だけでは必要な値を特定できない場合、又は利用者がGitHub上の最新状態の確認を明示した場合に限る。不要な外部接続、接続失敗による作業中断、同一情報の重複確認を避けるためである。固定後の承認済み決定記録が置換対象、承認日、承認内容、影響Taskを特定している項目だけは、その後発決定を正しい値として適用する。差異があっても正本と正しい値を特定できる場合は、同期差異を記録して正本に従い続行する。
-- GitHub Issue本文からTask ID Markerを確認する必要がある場合も、まず作業セッション、利用者が提示した本文、又は既取得のローカル記録を使う。これらにMarkerがなく、Taskがleafか判定できない場合だけGitHub APIを読む。Task ID Markerは、進捗管理だけを行う親Issueを誤って実行しないために必要である。
+- GitHub Issue本文からTask ID Markerを確認する必要がある場合も、まず作業セッション、利用者が提示した本文、又は既取得のローカル記録を使う。これらにMarkerがなく、Taskがleafか判定できない場合だけGitHub APIを読む。Task ID Markerは、進捗管理だけを行う親Issueを誤って実行しないために必要である。`manage_worktree.sh`でGitHub APIの読取りに失敗した場合は、`docs/github-issue-map.md`、`docs/task-map.md`、基準ref上のGit履歴から固定Planning snapshot、Task ID、Owner、着手依存と統合済み状態を復元できるleafだけを扱う。どれかを復元できないIssueは停止し、推測で開始しない。
 - 基準refと作成・再開するworktreeの双方に、`manage-task-worktrees`、`conduct-task-discussion`、`explain-with-context`の3つのSkillが存在する。開始プロンプトだけが存在し、実際の手順書を読めない状態を防ぐために必要である。
 
 ## 状態遷移
