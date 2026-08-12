@@ -6,8 +6,8 @@
 - `git`、`gh`、`code`を利用できる。GitHubの認証状態は開始条件に含めない。認証を必要とする操作が失敗した場合は、その操作と実際のエラーを報告し、認証操作を推測して案内・実行しない。
 - `/.worktrees/`と`/.codex/task-session.local.md`が`.gitignore`に登録されている。
 - 実行対象は`Lx-My-Sz`形式のleaf Task Issueである。
-- 固定Planning snapshotのTask Mapと接続台帳を依存DAG・Gate・Ownerの正本とし、GitHub Issue本文を実行用の同期コピーとして照合する。固定後の承認済み決定記録が置換対象、承認日、承認内容、影響Taskを特定している項目だけは、その後発決定を正しい値として適用する。差異があっても正本と正しい値を特定できる場合は、同期差異を記録して正本に従い続行する。
-- GitHub Issue本文のTask ID Marker（そのIssueが実行対象Taskであることを示す識別欄）を確認する。Task ID Markerは、進捗管理だけを行う親Issueを誤って実行しないために必要である。
+- 固定Planning snapshotのTask Mapと接続台帳を依存DAG・Gate・Ownerの正本とし、GitHub Issue本文を実行用の同期コピーとして照合する。作業セッション、利用者が提示したIssue本文、又は既に取得して記録したIssue本文で必要なTask ID Marker（実行対象Taskを識別する印）、Owner、依存、完了条件を確認できる場合、GitHub APIで同じIssueを再読取りしない。API読取りは、ローカル資料だけでは必要な値を特定できない場合、又は利用者がGitHub上の最新状態の確認を明示した場合に限る。不要な外部接続、接続失敗による作業中断、同一情報の重複確認を避けるためである。固定後の承認済み決定記録が置換対象、承認日、承認内容、影響Taskを特定している項目だけは、その後発決定を正しい値として適用する。差異があっても正本と正しい値を特定できる場合は、同期差異を記録して正本に従い続行する。
+- GitHub Issue本文からTask ID Markerを確認する必要がある場合も、まず作業セッション、利用者が提示した本文、又は既取得のローカル記録を使う。これらにMarkerがなく、Taskがleafか判定できない場合だけGitHub APIを読む。Task ID Markerは、進捗管理だけを行う親Issueを誤って実行しないために必要である。
 - 基準refと作成・再開するworktreeの双方に、`manage-task-worktrees`、`conduct-task-discussion`、`explain-with-context`の3つのSkillが存在する。開始プロンプトだけが存在し、実際の手順書を読めない状態を防ぐために必要である。
 
 ## 状態遷移
@@ -86,7 +86,7 @@ tracking Issueを指定された場合はworktreeを作成せず、次の順で�
 | Owner | 書込みPath／Glob、共有資産Owner |
 | Execution | 並行可能Task、直列化理由、Merge順、次wave解放条件 |
 
-Issue #3のPlanning snapshot `9bf911b9122bf4ec51ec48312cc310de29bfcdff`では、次のwaveになる。これは動線例であり、実行時は必ずIssueと固定snapshotを再取得する。
+Issue #3のPlanning snapshot `9bf911b9122bf4ec51ec48312cc310de29bfcdff`では、次のwaveになる。これは動線例であり、実行時は固定snapshotをGit上で確認し、Issue本文は作業セッション・利用者提示・既取得記録で必要な値を確認できる限り再取得しない。ローカル資料にない値が必要な場合又は利用者がGitHubの最新状態確認を明示した場合だけ、GitHub APIでIssueを読む。
 
 ```text
 Wave 1: #28
