@@ -71,6 +71,8 @@ rtk bash <skill>/scripts/manage_worktree.sh start 46 --base <gate-ref> --gate-co
 
 `plan`はworktreeを作成しない。単純なPath重複は検査するが、複雑Glob、除外規則、Schema、Migration、Interface、Registry、DI、Lockfile、生成物、共有FixtureはCodexがTask MapとIssueを意味的に監査する。`start --no-open`はVS Codeを開かず、worktreeと引継ぎファイルだけを作成する。
 
+GitHub Issueを読めない場合も、固定Planning snapshot、Task Map、接続台帳、Git履歴からGate依存を復元する。Gate後TaskのOwner PathがGate通過記録に未記録なら、開始せず不足項目を明示する。Commit件名だけでIssueを完了扱いにしない。
+
 未完了のleaf依存があるとき、`plan`は`RECOMMEND`として、その依存の**着手依存だけ**を再帰展開して見つけた未完了leaf Issueを表示する。候補はIssueの状態と着手依存だけに基づくため、表示された`plan <issue>`で基準refへの統合、Gate、Owner Path競合を改めて確認する。親Taskは従来どおり進捗文脈であり、候補にも阻害条件にも含めない。
 
 ## 配置規則
