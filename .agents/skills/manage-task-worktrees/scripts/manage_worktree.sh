@@ -197,6 +197,25 @@ local_owner_paths_for_task() {
   ' "$task_map"
 }
 
+local_gate_dependency_for_task() {
+  local requested_task="$1"
+  local connections="$primary_root/docs/task-connections.md"
+  [ -f "$connections" ] || return 1
+
+  awk -F '|' -v requested_task="$requested_task" '
+    {
+      consumer=$3
+      condition=$7
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", consumer)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", condition)
+      if (consumer == requested_task && condition ~ /Design Freeze Gate/) {
+        print condition
+        exit
+      }
+    }
+  ' "$connections"
+}
+
 local_start_dependencies_for_task() {
   local requested_task="$1"
   local task_map="$primary_root/docs/task-map.md"
@@ -220,19 +239,32 @@ local_start_dependencies_for_task() {
 local_issue_state() {
   local requested_issue="$1"
   local recorded_state="$2"
-  local merged_commit
-  merged_commit="$(git -C "$primary_root" log -1 --format='%H' origin/main --grep="#${requested_issue}" --fixed-strings 2>/dev/null || true)"
-  if [ -n "$merged_commit" ]; then
-    printf '%s\n' "CLOSED"
-  else
+  local metadata local_task_id owner_path merged_commit
+  metadata="$(local_issue_metadata "$requested_issue")" || {
     printf '%s\n' "$recorded_state"
-  fi
+    return 0
+  }
+  local_task_id="${metadata%%$'\t'*}"
+
+  # GitHub障害時にCommit件名だけでIssueを完了扱いにすると、同じIssue番号を
+  # 参照する運用・Skill修正Commitを成果物完了と誤認する。固定Owner Pathを
+  # 実際に変更したCommitだけを、ローカルの完了Evidenceとして採用する。
+  while IFS= read -r owner_path; do
+    simple_owner_path "$owner_path" || continue
+    merged_commit="$(git -C "$primary_root" log -1 --format='%H' origin/main --grep="#${requested_issue}" --fixed-strings -- "$owner_path" 2>/dev/null || true)"
+    if [ -n "$merged_commit" ]; then
+      printf '%s\n' "CLOSED"
+      return 0
+    fi
+  done < <(owner_path_lines "$(local_owner_paths_for_task "$local_task_id")")
+
+  printf '%s\n' "$recorded_state"
 }
 
 local_issue_view() {
   local requested_issue="$1"
   local requested_field="$2"
-  local metadata local_task_id remainder recorded_state local_title local_state local_url local_snapshot local_owner_paths dependency_task dependency_issue
+  local metadata local_task_id remainder recorded_state local_title local_state local_url local_snapshot local_owner_paths local_gate_dependency dependency_task dependency_issue
   metadata="$(local_issue_metadata "$requested_issue")" || return 1
   [ -n "$metadata" ] || return 1
 
@@ -247,7 +279,9 @@ local_issue_view() {
     body)
       local_snapshot="$(sed -nE 's/.*Planning snapshot: .*`([0-9a-f]{40})`.*/\1/p' "$primary_root/docs/github-issue-map.md" | head -1)"
       local_owner_paths="$(local_owner_paths_for_task "$local_task_id")"
-      [ -n "$local_snapshot" ] && [ -n "$local_owner_paths" ] || return 1
+      local_gate_dependency="$(local_gate_dependency_for_task "$local_task_id")"
+      [ -n "$local_snapshot" ] || return 1
+      [ -n "$local_owner_paths" ] || local_owner_paths="Gate通過記録に未記録"
       printf '%s\n' "<!-- knowledge-task-id: $local_task_id -->"
       printf '%s\n' "<!-- planning-snapshot: $local_snapshot -->"
       printf '%s\n' "| 項目 | 内容 |"
@@ -258,6 +292,9 @@ local_issue_view() {
         [ -n "$dependency_issue" ] || return 1
         printf '%s\n' "| 着手依存 | https://${repo_slug}/issues/${dependency_issue} |"
       done
+      if [ -n "$local_gate_dependency" ]; then
+        printf '%s\n' "| Gate通過依存 | $local_gate_dependency |"
+      fi
       ;;
     title) printf '%s\n' "$local_title" ;;
     state) printf '%s\n' "$local_state" ;;
@@ -380,6 +417,10 @@ gate_is_required() {
   printf '%s\n' "$gate_row" | grep -Eq 'Gate' || return 1
   printf '%s\n' "$gate_row" | grep -Eq '該当なし' && return 1
   return 0
+}
+
+owner_paths_are_resolved() {
+  [ "$owner_paths" != "Gate通過記録に未記録" ]
 }
 
 find_dependency_commit() {
@@ -810,7 +851,6 @@ run_plan_or_start() {
   validate_ref_required_skills "$base_sha" "基準ref"
   validate_ignore_rules
   validate_dependencies "$base_sha"
-  validate_active_path_conflicts
 
   if gate_is_required; then
     [ -n "$gate_commit" ] || die "Gate通過依存があります。--gate-commit <sha>を指定してください"
@@ -822,6 +862,10 @@ run_plan_or_start() {
       die "Gate Commit $gate_sha が基準ref $base_ref に含まれていません"
     gate_commit="$gate_sha"
   fi
+
+  owner_paths_are_resolved ||
+    die "Gate後Taskの書込み可能なPath／GlobがGate通過記録にありません。Gate通過CommitとOwner Pathを記録してから開始してください"
+  validate_active_path_conflicts
 
   print_plan
   [ "$action" = "plan" ] && return 0
