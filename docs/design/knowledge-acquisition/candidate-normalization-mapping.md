@@ -123,9 +123,10 @@ Scopeは、`domain`（技術・業務分野）、`language`（プログラミン
 | 対象命題 | `assertion_id` | 後続が確定した命題IDへ関連付ける | Candidate段階で仮IDを保存しない |
 | 観測行為 | `evidence_kind`、`stance`、`knowledge_report`、`strength` | 第4.4節の分類を使う。条件付きFieldは該当しないとき省略する | 質問を不知申告へ、反証を不知申告へ読み替えない |
 | 加工前の本人表現 | `raw_content`、`content_language` | 出典断片の該当範囲をそのまま保持する | Codexの要約・説明で置き換えない |
-| 出典の取得形式・位置 | `source.source_kind`、`source_locator`、`fragment_locator` | 会話発言なら`message`、ファイルなら`file`を設定し、該当位置を可能な限り示す | `message`と`file`を同時に設定しない |
+| 出典の取得形式と元データへの参照先 | `source.source_kind`、`source.source_locator` | `source.source_kind`は会話内の発言なら`message`、ファイルから得た原文なら`file`を設定する。`source.source_locator`には、その会話またはファイルという元データへ再到達できる参照先を必ず設定する | `message`と`file`を同時に設定しない。`source.source_locator`へ空文字列、候補の要約、Candidate ID（候補を区別するだけの識別子）を入れない。元データを特定できなければ、原文と前後関係を再確認できないためEvidence候補にしない |
+| 出典内の対象範囲 | `source.fragment_locator` | 発言番号、行番号、文字範囲など、`source.source_locator`が指す出典内で`raw_content`の対象範囲を一意に示す位置を設定する。出典全体が単一の原文断片であり、範囲を分けなくても対象を一意にできる場合だけ省略できる。長い発言・ファイル、または同一出典に複数の行為・根拠断片があり、対象範囲の一意化が必要な場合は必須とする | 空文字列、候補の要約、Candidate IDを入れない。位置を要する出典で省略すると、別の行為との混同、同一断片の重複採用、`raw_content`との対応確認を防げないためである。一方、単一断片に不要な位置情報を作らないことで、条件付き属性というL1論理スキーマの契約を守る |
 | 原文の提示者と文脈 | `source.originator`、`source.episode_id`、`source.captured_at` | 提示者が`user`であること、完了Episode、取得時点を記録する | Codex・Systemだけの出典をEvidenceにしない |
-| 内容照合 | `source.content_digest` | 出典内容を機械照合できるときだけ設定する | 照合値がないことを内容の否定と扱わない |
+| 内容照合 | `source.content_digest` | 同じ`source.source_locator`の元データ内容を機械的に照合できる場合だけ、内容照合値を設定する。照合値を計算できない場合、または元データが変化しないことを別の方法で確認できる場合は省略できる | 空文字列、候補の要約、原文そのものを入れない。内容照合値は参照先の変更・取り違えを検出するために必要であり、要約や原文では機械的な同一性を安全に判定できない。照合値が省略されても原文の内容やEvidence候補の価値を否定しない |
 | 観測・有効情報 | `temporal.observed_at`、必要に応じて他の`temporal`属性 | `observed_at`は必須。出典取得時点以前とする | 観測していない製品版・期間を推測しない |
 | 保存時の識別・監査 | `evidence_id`、`audit` | Candidate段階では未確定 | 候補化と同時にEvidence正本を作らない |
 
