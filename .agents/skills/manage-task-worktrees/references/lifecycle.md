@@ -26,6 +26,8 @@
 
 `plan`と`status`は読取り専用である。`start`はbranch（変更履歴の作業系列）、worktree（分離作業ディレクトリ）、ローカル引継ぎファイルを作成し、既定ではVS Codeを開く。既存worktreeを再開する場合は、質問・回答・判断履歴を上書きせず、不足する必須Skillの開始プロンプトだけを追記する。`finish`は完了判定材料を表示するだけでCommitやpushを行わない。`remove`はMerge済みで変更が残っていないworktreeだけを削除する。
 
+`plan`が未完了のleaf依存で停止するときは、対象依存の未完了**着手依存だけ**を再帰展開し、最下流の未完了leafを`RECOMMEND`として表示する。Gate通過依存は候補探索へ含めず、各候補の通常の`plan`で確認する。これは次に`plan`で確認する候補であり、開始可能の保証ではない。候補ごとに基準ref、統合Commit、Gate、Owner Path競合を通常の`plan`で検証する。
+
 ## 基準ref
 
 通常は`origin/main`を使用する。次の場合は`--base`を必須とする。
