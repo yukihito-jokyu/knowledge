@@ -27,7 +27,7 @@ Task Issueを1つのブランチ、worktree、VS Codeウィンドウ、Codexセ�
 
 1. 変更操作の前に[ライフサイクル](references/lifecycle.md)を全文読む。
 2. 指定Issueがtracking Taskなら、`plan`や`start`を実行せず、Issue本文と固定Planning snapshotから子孫leafを再帰的に展開する。
-3. leafの依存DAG、Gate、基準ref、Owner Path、既存worktreeを照合し、現在のready frontierと将来waveをユーザーへ提案する。
+3. leafの依存DAG、Gate、基準ref、Owner Path、既存worktreeを照合し、現在のready frontierと将来waveをユーザーへ提案する。直接の着手依存が未完了で`plan`が停止する場合も、停止理由だけで終えず、その依存を再帰展開して現在確認すべきleaf Issueを候補として表示する。
 4. 利用者の実装・開始依頼の範囲に含まれる現在waveの各leafについてPrimary checkoutから `plan` を実行する。対象が依頼から一意に定まる場合は選択待ちを挟まない。機械判定に加え、複雑Globと共有資産のPath競合を意味的に監査する。
 5. wave全体の作成内容、並行・直列理由、Merge順、外部操作を示し、`plan`合格後はworktree作成専用の承認待ちを挟まず各leafの `start` を実行する。利用者の実装・開始依頼を、依頼範囲内のworktree作成とVS Code起動の指示として扱う。
 6. VS Codeが開いたら、ユーザーへ各ウィンドウでCodexの開始と引継ぎファイルの読込みを依頼する。生成された開始プロンプトでは `$conduct-task-discussion` と `$explain-with-context` も必ず指定する。
@@ -70,6 +70,8 @@ rtk bash <skill>/scripts/manage_worktree.sh start 46 --base <gate-ref> --gate-co
 ```
 
 `plan`はworktreeを作成しない。単純なPath重複は検査するが、複雑Glob、除外規則、Schema、Migration、Interface、Registry、DI、Lockfile、生成物、共有FixtureはCodexがTask MapとIssueを意味的に監査する。`start --no-open`はVS Codeを開かず、worktreeと引継ぎファイルだけを作成する。
+
+未完了のleaf依存があるとき、`plan`は`RECOMMEND`として、その依存の**着手依存だけ**を再帰展開して見つけた未完了leaf Issueを表示する。候補はIssueの状態と着手依存だけに基づくため、表示された`plan <issue>`で基準refへの統合、Gate、Owner Path競合を改めて確認する。親Taskは従来どおり進捗文脈であり、候補にも阻害条件にも含めない。
 
 ## 配置規則
 

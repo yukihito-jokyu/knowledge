@@ -151,6 +151,20 @@ dependency_issue_numbers() {
     sort -nu || true
 }
 
+start_dependency_issue_numbers_from_file() {
+  dependency_file="$1"
+  awk -F '|' '
+    {
+      key=$2
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      if (key=="着手依存") print $0
+    }
+  ' "$dependency_file" |
+    grep -Eo '(/issues/[0-9]+|#[0-9]+)' |
+    sed -E 's#.*/##; s/^#//' |
+    sort -nu || true
+}
+
 task_id_from_file() {
   grep -Eo 'knowledge-task-id: L[0-9]+(-M[0-9]+)?(-S[0-9]+)?' "$1" |
     head -1 |
@@ -215,6 +229,101 @@ find_dependency_owner_commit() {
   done < <(owner_path_lines "$dep_owner_paths")
 }
 
+recommendation_seen=""
+recommendation_issue_numbers=""
+
+append_recommendation_issue() {
+  candidate_issue="$1"
+  case " $recommendation_issue_numbers " in
+    *" $candidate_issue "*) return 0 ;;
+  esac
+  recommendation_issue_numbers="${recommendation_issue_numbers} ${candidate_issue}"
+}
+
+collect_recommendation_issues() {
+  candidate_issue="$1"
+  case " $recommendation_seen " in
+    *" $candidate_issue "*) return 0 ;;
+  esac
+  recommendation_seen="${recommendation_seen} ${candidate_issue}"
+
+  candidate_body_file="$(mktemp "${TMPDIR:-/tmp}/manage-task-recommendation.XXXXXX")"
+  if ! gh issue view "$candidate_issue" --repo "$repo_slug" --json body --jq .body >"$candidate_body_file"; then
+    rm -f "$candidate_body_file"
+    return 1
+  fi
+
+  candidate_task_id="$(task_id_from_file "$candidate_body_file")"
+  candidate_state="$(gh issue view "$candidate_issue" --repo "$repo_slug" --json state --jq .state 2>/dev/null)" || {
+    rm -f "$candidate_body_file"
+    return 1
+  }
+
+  # Closed Issueは開始候補にも再帰探索の対象にも含めない。
+  if [ "$candidate_state" = "CLOSED" ]; then
+    rm -f "$candidate_body_file"
+    return 0
+  fi
+
+  candidate_has_open_leaf_dependency=false
+  for nested_issue in $(start_dependency_issue_numbers_from_file "$candidate_body_file"); do
+    nested_body_file="$(mktemp "${TMPDIR:-/tmp}/manage-task-recommendation.XXXXXX")"
+    if ! gh issue view "$nested_issue" --repo "$repo_slug" --json body --jq .body >"$nested_body_file"; then
+      rm -f "$nested_body_file" "$candidate_body_file"
+      return 1
+    fi
+    nested_task_id="$(task_id_from_file "$nested_body_file")"
+    rm -f "$nested_body_file"
+
+    # 親Taskは進捗文脈であり、leafの着手可否を阻害しない。
+    if ! is_leaf_task "$nested_task_id"; then
+      continue
+    fi
+
+    nested_state="$(gh issue view "$nested_issue" --repo "$repo_slug" --json state --jq .state 2>/dev/null)" || {
+      rm -f "$candidate_body_file"
+      return 1
+    }
+    if [ "$nested_state" != "CLOSED" ]; then
+      candidate_has_open_leaf_dependency=true
+      collect_recommendation_issues "$nested_issue" || {
+        rm -f "$candidate_body_file"
+        return 1
+      }
+    fi
+  done
+  rm -f "$candidate_body_file"
+
+  if [ "$candidate_has_open_leaf_dependency" = false ] && is_leaf_task "$candidate_task_id"; then
+    append_recommendation_issue "$candidate_issue"
+  fi
+}
+
+print_blocked_issue_recommendations() {
+  blocked_issue="$1"
+  recommendation_seen=""
+  recommendation_issue_numbers=""
+
+  collect_recommendation_issues "$blocked_issue" || {
+    note "WARN: ブロックされた依存Issueの再帰展開に失敗したため、対応Issueを提案できません"
+    return 0
+  }
+
+  if [ -z "$recommendation_issue_numbers" ]; then
+    note ""
+    note "RECOMMEND: Issue #${blocked_issue}の着手依存から、現在確認できる未完了leaf Issueを特定できませんでした。依存循環、Issue本文、またはGate条件を確認してください。"
+    return 0
+  fi
+  note ""
+  note "RECOMMEND: Issue #${blocked_issue}の未完了着手依存を再帰展開した開始候補です。"
+  for recommended_issue in $(printf '%s\n' "$recommendation_issue_numbers" | tr ' ' '\n' | sed '/^$/d' | sort -nu); do
+    recommended_title="$(gh issue view "$recommended_issue" --repo "$repo_slug" --json title --jq .title 2>/dev/null)" || recommended_title="タイトル取得失敗"
+    note "- Issue #${recommended_issue}: ${recommended_title}"
+    note "  次の確認: rtk bash ${SKILL_ROOT}/scripts/${PROGRAM_NAME} plan ${recommended_issue}"
+  done
+  note "候補はIssue状態と着手依存だけから求めています。基準refへの統合、Gate、Owner Path競合は上記planで必ず確認してください。"
+}
+
 validate_dependencies() {
   base_sha="$1"
   dependency_summary=""
@@ -235,7 +344,10 @@ validate_dependencies() {
     fi
 
     dep_state="$(gh issue view "$dep_issue" --repo "$repo_slug" --json state --jq .state)"
-    [ "$dep_state" = "CLOSED" ] || die "着手依存Issue #${dep_issue}が未完了です: $dep_state"
+    if [ "$dep_state" != "CLOSED" ]; then
+      print_blocked_issue_recommendations "$dep_issue"
+      die "着手依存Issue #${dep_issue}が未完了です: $dep_state"
+    fi
 
     dep_commit="$(find_dependency_commit "$dep_body_file")"
     if [ -z "$dep_commit" ]; then
