@@ -68,8 +68,39 @@ require_primary_checkout() {
 
 load_repository_slug() {
   need_command gh
-  repo_slug="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)" ||
-    die "GitHub repositoryを特定できません。originまたはGitHub操作の実際のエラーを確認してください"
+  origin_url="$(git -C "$primary_root" remote get-url origin 2>/dev/null)" ||
+    die "origin remoteからGitHub repositoryを特定できません"
+
+  case "$origin_url" in
+    http://*|https://*)
+      repository_location="${origin_url#*://}"
+      repository_location="${repository_location#*@}"
+      gh_hostname="${repository_location%%/*}"
+      repo_slug="${repository_location#*/}"
+      ;;
+    git@*:*)
+      repository_location="${origin_url#git@}"
+      gh_hostname="${repository_location%%:*}"
+      repo_slug="${repository_location#*:}"
+      ;;
+    ssh://git@*/*)
+      repository_location="${origin_url#ssh://git@}"
+      gh_hostname="${repository_location%%/*}"
+      repo_slug="${repository_location#*/}"
+      ;;
+    *) die "origin remoteからGitHub repositoryを特定できません: $origin_url" ;;
+  esac
+
+  repo_slug="${repo_slug%.git}"
+  printf '%s\n' "$gh_hostname" | grep -Eq '^[^/:]+$' ||
+    die "origin remoteからGitHub hostを特定できません: $origin_url"
+  printf '%s\n' "$repo_slug" | grep -Eq '^[^/]+/[^/]+$' ||
+    die "origin remoteからGitHub repositoryを特定できません: $origin_url"
+  repo_slug="${gh_hostname}/${repo_slug}"
+}
+
+gh_issue_view() {
+  gh issue view "$@"
 }
 
 validate_issue_number() {
@@ -89,11 +120,11 @@ load_issue() {
   fi
   ISSUE_BODY_FILE="$(mktemp "${TMPDIR:-/tmp}/manage-task-worktrees.XXXXXX")"
 
-  gh issue view "$issue_number" --repo "$repo_slug" --json body --jq .body >"$ISSUE_BODY_FILE" ||
+  gh_issue_view "$issue_number" --repo "$repo_slug" --json body --jq .body >"$ISSUE_BODY_FILE" ||
     die "Issue #${issue_number}を取得できません"
-  issue_title="$(gh issue view "$issue_number" --repo "$repo_slug" --json title --jq .title)"
-  issue_state="$(gh issue view "$issue_number" --repo "$repo_slug" --json state --jq .state)"
-  issue_url="$(gh issue view "$issue_number" --repo "$repo_slug" --json url --jq .url)"
+  issue_title="$(gh_issue_view "$issue_number" --repo "$repo_slug" --json title --jq .title)"
+  issue_state="$(gh_issue_view "$issue_number" --repo "$repo_slug" --json state --jq .state)"
+  issue_url="$(gh_issue_view "$issue_number" --repo "$repo_slug" --json url --jq .url)"
 
   task_id="$(
     grep -Eo 'knowledge-task-id: L[0-9]+(-M[0-9]+)?(-S[0-9]+)?' "$ISSUE_BODY_FILE" |
@@ -248,13 +279,13 @@ collect_recommendation_issues() {
   recommendation_seen="${recommendation_seen} ${candidate_issue}"
 
   candidate_body_file="$(mktemp "${TMPDIR:-/tmp}/manage-task-recommendation.XXXXXX")"
-  if ! gh issue view "$candidate_issue" --repo "$repo_slug" --json body --jq .body >"$candidate_body_file"; then
+  if ! gh_issue_view "$candidate_issue" --repo "$repo_slug" --json body --jq .body >"$candidate_body_file"; then
     rm -f "$candidate_body_file"
     return 1
   fi
 
   candidate_task_id="$(task_id_from_file "$candidate_body_file")"
-  candidate_state="$(gh issue view "$candidate_issue" --repo "$repo_slug" --json state --jq .state 2>/dev/null)" || {
+  candidate_state="$(gh_issue_view "$candidate_issue" --repo "$repo_slug" --json state --jq .state 2>/dev/null)" || {
     rm -f "$candidate_body_file"
     return 1
   }
@@ -268,7 +299,7 @@ collect_recommendation_issues() {
   candidate_has_open_leaf_dependency=false
   for nested_issue in $(start_dependency_issue_numbers_from_file "$candidate_body_file"); do
     nested_body_file="$(mktemp "${TMPDIR:-/tmp}/manage-task-recommendation.XXXXXX")"
-    if ! gh issue view "$nested_issue" --repo "$repo_slug" --json body --jq .body >"$nested_body_file"; then
+    if ! gh_issue_view "$nested_issue" --repo "$repo_slug" --json body --jq .body >"$nested_body_file"; then
       rm -f "$nested_body_file" "$candidate_body_file"
       return 1
     fi
@@ -280,7 +311,7 @@ collect_recommendation_issues() {
       continue
     fi
 
-    nested_state="$(gh issue view "$nested_issue" --repo "$repo_slug" --json state --jq .state 2>/dev/null)" || {
+    nested_state="$(gh_issue_view "$nested_issue" --repo "$repo_slug" --json state --jq .state 2>/dev/null)" || {
       rm -f "$candidate_body_file"
       return 1
     }
@@ -317,7 +348,7 @@ print_blocked_issue_recommendations() {
   note ""
   note "RECOMMEND: Issue #${blocked_issue}の未完了着手依存を再帰展開した開始候補です。"
   for recommended_issue in $(printf '%s\n' "$recommendation_issue_numbers" | tr ' ' '\n' | sed '/^$/d' | sort -nu); do
-    recommended_title="$(gh issue view "$recommended_issue" --repo "$repo_slug" --json title --jq .title 2>/dev/null)" || recommended_title="タイトル取得失敗"
+    recommended_title="$(gh_issue_view "$recommended_issue" --repo "$repo_slug" --json title --jq .title 2>/dev/null)" || recommended_title="タイトル取得失敗"
     note "- Issue #${recommended_issue}: ${recommended_title}"
     note "  次の確認: rtk bash ${SKILL_ROOT}/scripts/${PROGRAM_NAME} plan ${recommended_issue}"
   done
@@ -331,7 +362,7 @@ validate_dependencies() {
 
   for dep_issue in $(dependency_issue_numbers); do
     dep_body_file="$(mktemp "${TMPDIR:-/tmp}/manage-task-dependency.XXXXXX")"
-    gh issue view "$dep_issue" --repo "$repo_slug" --json body --jq .body >"$dep_body_file"
+    gh_issue_view "$dep_issue" --repo "$repo_slug" --json body --jq .body >"$dep_body_file"
     dep_task_id="$(task_id_from_file "$dep_body_file")"
     [ -n "$dep_task_id" ] || die "依存Issue #${dep_issue}にTask ID Markerがありません"
 
@@ -343,7 +374,7 @@ validate_dependencies() {
       continue
     fi
 
-    dep_state="$(gh issue view "$dep_issue" --repo "$repo_slug" --json state --jq .state)"
+    dep_state="$(gh_issue_view "$dep_issue" --repo "$repo_slug" --json state --jq .state)"
     if [ "$dep_state" != "CLOSED" ]; then
       print_blocked_issue_recommendations "$dep_issue"
       die "着手依存Issue #${dep_issue}が未完了です: $dep_state"
