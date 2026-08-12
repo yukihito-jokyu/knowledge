@@ -1,6 +1,0 @@
-# mac
-.DS_Store
-
-# Local Task worktrees and Codex session handoff
-/.worktrees/
-/.codex/task-session.local.md
