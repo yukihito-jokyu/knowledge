@@ -103,7 +103,7 @@ handoff: <worktree>/.codex/task-session.local.md
 - dirtyなworktreeを削除しない。
 - `--merged-into`へHEADが含まれないworktreeを削除しない。
 - `--force`、`git reset --hard`、未確認のbranch削除を使わない。
-- 正本上の直接leaf依存が未完了、統合Commitが未記録、または基準refに含まれない場合は開始しない。同期コピーであるIssueにだけ存在し、正本から直接依存ではないと証明できる親Taskや推移的依存は、この判定へ含めず非阻害差異として記録する。
+- 正本上の直接leaf依存が未完了、統合Commitが未記録、または基準refに含まれない場合は開始しない。着手依存欄に記載された親Taskは状態にかかわらず進捗文脈として記録し、着手判定へ含めない。推移的依存も、正本から直接依存ではないと証明できる場合は判定から除外する。
 - Gate依存がある場合、`--gate-commit`なしでは開始しない。
 - 並行Taskの書込みPathが重なる場合は開始せず、単一Ownerへ直列化する。
 - 自動Path検査の合格だけで並行可能と断定しない。
