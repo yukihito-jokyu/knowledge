@@ -157,13 +157,8 @@ task_id_from_file() {
     awk '{print $2}'
 }
 
-is_ancestor_task() {
-  ancestor_task_id="$1"
-  descendant_task_id="$2"
-  case "$descendant_task_id" in
-    "${ancestor_task_id}-"*) return 0 ;;
-    *) return 1 ;;
-  esac
+is_leaf_task() {
+  printf '%s\n' "$1" | grep -Eq '^L[0-9]+-M[0-9]+-S[0-9]+$'
 }
 
 gate_is_required() {
@@ -193,7 +188,7 @@ find_dependency_commit() {
 find_dependency_owner_commit() {
   dep_body_file="$1"
   base_sha="$2"
-  dep_owner_path="$(
+  dep_owner_paths="$(
     awk -F '|' '
       {
         key=$2
@@ -208,9 +203,16 @@ find_dependency_owner_commit() {
       }
     ' "$dep_body_file"
   )"
-  [ -n "$dep_owner_path" ] || return 0
-  printf '%s\n' "$dep_owner_path" | grep -Eq '^[[:alnum:]_.\/-]+$' || return 0
-  git -C "$primary_root" log -1 --format='%H' "$base_sha" -- "$dep_owner_path" || true
+  [ -n "$dep_owner_paths" ] || return 0
+
+  while IFS= read -r dep_owner_path; do
+    simple_owner_path "$dep_owner_path" || continue
+    dep_commit="$(git -C "$primary_root" log -1 --format='%H' "$base_sha" -- "$dep_owner_path" || true)"
+    [ -z "$dep_commit" ] || {
+      printf '%s\n' "$dep_commit"
+      return 0
+    }
+  done < <(owner_path_lines "$dep_owner_paths")
 }
 
 validate_dependencies() {
@@ -224,14 +226,16 @@ validate_dependencies() {
     dep_task_id="$(task_id_from_file "$dep_body_file")"
     [ -n "$dep_task_id" ] || die "依存Issue #${dep_issue}にTask ID Markerがありません"
 
-    if is_ancestor_task "$dep_task_id" "$task_id"; then
+    dep_state="$(gh issue view "$dep_issue" --repo "$repo_slug" --json state --jq .state)"
+    [ "$dep_state" = "CLOSED" ] || die "着手依存Issue #${dep_issue}が未完了です: $dep_state"
+
+    # tracking Taskは子Taskの進捗と統合条件だけを追跡し、独自の成果物Commitを持たない。
+    # 着手依存に含まれていても、closed状態を確認したらCommit Evidenceの検査対象から除外する。
+    if ! is_leaf_task "$dep_task_id"; then
       tracking_context_summary="${tracking_context_summary}#${dep_issue}:${dep_task_id} "
       rm -f "$dep_body_file"
       continue
     fi
-
-    dep_state="$(gh issue view "$dep_issue" --repo "$repo_slug" --json state --jq .state)"
-    [ "$dep_state" = "CLOSED" ] || die "着手依存Issue #${dep_issue}が未完了です: $dep_state"
 
     dep_commit="$(find_dependency_commit "$dep_body_file")"
     if [ -z "$dep_commit" ]; then
