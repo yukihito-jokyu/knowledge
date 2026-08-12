@@ -226,16 +226,16 @@ validate_dependencies() {
     dep_task_id="$(task_id_from_file "$dep_body_file")"
     [ -n "$dep_task_id" ] || die "依存Issue #${dep_issue}にTask ID Markerがありません"
 
-    dep_state="$(gh issue view "$dep_issue" --repo "$repo_slug" --json state --jq .state)"
-    [ "$dep_state" = "CLOSED" ] || die "着手依存Issue #${dep_issue}が未完了です: $dep_state"
-
-    # tracking Taskは子Taskの進捗と統合条件だけを追跡し、独自の成果物Commitを持たない。
-    # 着手依存に含まれていても、closed状態を確認したらCommit Evidenceの検査対象から除外する。
+    # tracking Task（親Task）は進捗・統合条件の文脈だけを表し、独自の成果物Commitを持たない。
+    # 状態にかかわらず着手依存としては扱わず、leaf Taskだけを阻害条件にする。
     if ! is_leaf_task "$dep_task_id"; then
       tracking_context_summary="${tracking_context_summary}#${dep_issue}:${dep_task_id} "
       rm -f "$dep_body_file"
       continue
     fi
+
+    dep_state="$(gh issue view "$dep_issue" --repo "$repo_slug" --json state --jq .state)"
+    [ "$dep_state" = "CLOSED" ] || die "着手依存Issue #${dep_issue}が未完了です: $dep_state"
 
     dep_commit="$(find_dependency_commit "$dep_body_file")"
     if [ -z "$dep_commit" ]; then
