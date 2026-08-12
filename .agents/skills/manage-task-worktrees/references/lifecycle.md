@@ -6,7 +6,7 @@
 - `git`、`gh`、`code`を利用でき、`gh auth status`が成功する。
 - `/.worktrees/`と`/.codex/task-session.local.md`が`.gitignore`に登録されている。
 - 実行対象は`Lx-My-Sz`形式のleaf Task Issueである。
-- 固定Planning snapshotのTask Mapと接続台帳を依存DAG・Gate・Ownerの正本とし、GitHub Issue本文を実行用の同期コピーとして照合する。差異があれば開始しない。
+- 固定Planning snapshotのTask Mapと接続台帳を依存DAG・Gate・Ownerの正本とし、GitHub Issue本文を実行用の同期コピーとして照合する。固定後の承認済み決定記録が置換対象、承認日、承認内容、影響Taskを特定している項目だけは、その後発決定を正しい値として適用する。差異があっても正本と正しい値を特定できる場合は、同期差異を記録して正本に従い続行する。
 - GitHub Issue本文のTask ID Marker（そのIssueが実行対象Taskであることを示す識別欄）を確認する。Task ID Markerは、進捗管理だけを行う親Issueを誤って実行しないために必要である。
 - 基準refと作成・再開するworktreeの双方に、`manage-task-worktrees`、`conduct-task-discussion`、`explain-with-context`の3つのSkillが存在する。開始プロンプトだけが存在し、実際の手順書を読めない状態を防ぐために必要である。
 
@@ -34,7 +34,7 @@
 - 依存Taskを統合した専用integration refから開始する。
 - `origin/main`へ未統合だが、承認済みの共通起点Commitがある。
 
-依存Issueはclosedだけでは不十分である。まず基準refを更新し、依存成果物が実際に含まれるかをGit履歴で確認する。Issueのhuman-progress領域に統合Commitが記録されていれば、そのCommitが基準refに含まれることも確認する。記録が空欄・未実施のままでも、依存Issueがclosedで、単一のOwner Pathに対する成果物Commitを基準ref上で特定できる場合は、そのCommitを着手Evidenceとして使用し、Issue記録の同期漏れを警告する。Issue記録だけを根拠に、Git上で統合済みの依存を未統合と判定しない。
+依存Issueは、正本上の直接leaf依存だけを着手判定へ含める。同期コピーであるIssueにだけ追加された親Taskや推移的依存は、正本から直接依存でないと証明できる場合、非阻害差異として記録し判定から除外する。直接leaf依存もclosedだけでは不十分である。まず基準refを更新し、依存成果物が実際に含まれるかをGit履歴で確認する。Issueのhuman-progress領域に統合Commitが記録されていれば、そのCommitが基準refに含まれることも確認する。記録が空欄・未実施のままでも、依存Issueがclosedで、単一のOwner Pathに対する成果物Commitを基準ref上で特定できる場合は、そのCommitを着手Evidenceとして使用し、Issue記録の同期漏れを警告する。Issue記録だけを根拠に、Git上で統合済みの依存を未統合と判定しない。
 
 Gate依存があるTaskは`--gate-commit <sha>`を指定する。スクリプトはGate Commitが基準refに含まれることを確認する。Gateの意味的な合格判定は行わない。
 
@@ -67,7 +67,7 @@ tracking Issueを指定された場合はworktreeを作成せず、次の順で�
 
 1. 指定IssueのTask ID、Planning snapshot、直下の子Issueを読む。
 2. `Lx`または`Lx-My`の子を同じ方法で再帰的に辿り、`Lx-My-Sz`の子孫leafを列挙する。子IssueはIssue本文のgenerated領域にある「直下の子Issue」だけから辿る。
-3. 各子のTask ID、親ID、Planning snapshotが親および固定Task Mapと一致することを確認する。差異があれば開始しない。
+3. 各子のTask ID、親ID、Planning snapshotが親および固定Task Mapと一致することを確認する。差異があっても正本と正しい値を特定できる場合は、同期差異を警告して固定Task Mapに従う。正しい値を特定できない部分だけを利用者へ確認し、影響しないleafの展開は続ける。
 4. 固定Planning snapshotのTask Mapと接続台帳を読み、着手依存、完了・Merge依存、Gate、Owner Path、Merge順を復元する。現在のIssue本文だけから新しい依存を推測しない。
 5. 基準refを更新してから、依存Issueの状態、Git上の依存成果物Commitとbaseへの包含、human-progressの統合Commit、Gate Commit、既存worktreeを確認し、現在開始できるleafをready frontierとする。human-progressとGit履歴が食い違う場合はGitの包含関係を実態判定に使い、記録差異を別途警告する。
 6. ready frontier以降は、先行Taskの統合により解放される条件付きの将来waveとして示す。先行統合前に将来waveのbase SHAを確定しない。
@@ -124,7 +124,7 @@ $manage-task-worktrees、$conduct-task-discussion、$explain-with-context を使
 ユーザーへの返答と成果物では前提知識、用語の意味、各要素が必要な理由を省略しないでください。
 Commit前に別サブエージェントへ、Issue #1、直接の後続Issue、固定Planning snapshot、
 変更成果物の矛盾・欠落・説明不足をレビューさせ、修正指摘がなくなるまで対応してください。
-依存関係、Gate、成果物Ownerに差異があれば作業を止めて報告してください。
+依存関係、Gate、成果物Ownerに差異があれば正本、正しい値、影響範囲を報告し、正本を特定できるOwner外の同期差異は記録して作業を続けてください。
 ユーザーが明示的に承認するまでCommitしないでください。
 ```
 
