@@ -95,7 +95,7 @@ handoff: <worktree>/.codex/task-session.local.md
 - Commit前に別サブエージェントへ、Issue #1、直接の後続Issue、固定Planning snapshot、変更成果物の整合性を独立レビューさせる。
 - Issueの単一Owner Pathだけを変更する。
 - 意味判断、依存関係、Gate条件を作業セッション内で追加しない。
-- 契約差異や未解決TBDを見つけた場合は実装を止め、元セッションへ戻す。
+- 契約差異や未解決TBDを見つけた場合は、`conduct-task-discussion` の「差異を止めずに扱う」に従う。正本と正しい値を特定できるOwner外の同期差異は記録して続行し、判断に依存しない作業を止めない。
 - 親Taskではなくleaf Issueだけを実行単位にする。
 
 ## 安全境界
@@ -103,7 +103,7 @@ handoff: <worktree>/.codex/task-session.local.md
 - dirtyなworktreeを削除しない。
 - `--merged-into`へHEADが含まれないworktreeを削除しない。
 - `--force`、`git reset --hard`、未確認のbranch削除を使わない。
-- 依存Issueが未完了、統合Commitが未記録、または基準refに含まれない場合は開始しない。
+- 正本上の直接leaf依存が未完了、統合Commitが未記録、または基準refに含まれない場合は開始しない。同期コピーであるIssueにだけ存在し、正本から直接依存ではないと証明できる親Taskや推移的依存は、この判定へ含めず非阻害差異として記録する。
 - Gate依存がある場合、`--gate-commit`なしでは開始しない。
 - 並行Taskの書込みPathが重なる場合は開始せず、単一Ownerへ直列化する。
 - 自動Path検査の合格だけで並行可能と断定しない。
