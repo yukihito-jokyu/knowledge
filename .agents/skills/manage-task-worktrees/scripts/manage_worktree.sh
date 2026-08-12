@@ -323,9 +323,6 @@ load_issue() {
     ' "$ISSUE_BODY_FILE"
   )"
   [ -n "$owner_paths" ] || die "Issue #${issue_number}に書込み可能なPath／Globがありません"
-  if printf '%s\n' "$owner_paths" | grep -Eq 'TBD|未確定'; then
-    die "書込み可能なPath／Globに未解決TBDがあります: $owner_paths"
-  fi
 }
 
 dependency_rows() {

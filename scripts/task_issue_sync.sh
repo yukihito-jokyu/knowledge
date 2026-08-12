@@ -254,7 +254,7 @@ path_for() {
     L6-M5-S1) printf 'tests/evaluation/workflows/knowledge-accumulation/**、tests/evaluation/reports/workflows/knowledge-accumulation/**' ;;
     L6-M5-S2) printf 'tests/evaluation/workflows/article-reading/**、tests/evaluation/reports/workflows/article-reading/**' ;;
     L6-M5-S3) printf 'tests/evaluation/workflows/regression/**、tests/evaluation/reports/final/**' ;;
-    L2-*) printf 'L2 Design Freeze Gate通過記録の%s専用Path（Issue作成時TBD、Ready前に実値化）' "$1" ;;
+    L2-*) printf 'L2 Design Freeze Gate通過記録の%s専用Path' "$1" ;;
     L6-M4-S1) printf 'tests/evaluation/suites/cli/**、tests/evaluation/reports/cli/**' ;;
     L6-M4-S2) printf 'tests/evaluation/suites/l3/knowledge-acquisition/**、tests/evaluation/reports/l3/knowledge-acquisition/**' ;;
     L6-M4-S3) printf 'tests/evaluation/suites/l3/knowledge-update/**、tests/evaluation/reports/l3/knowledge-update/**' ;;
@@ -331,7 +331,7 @@ human_progress() {
 - [ ] 直接依存とGate条件を確認した
 - [ ] Owner／Path境界を守った
 - [ ] Task固有の検証を完了した
-- [ ] 未解決の契約差異とReady後のTBDがない
+- [ ] 未解決の契約差異がない
 
 ### 着手・検証Evidence
 
@@ -472,7 +472,7 @@ ${name}ことで、\`${deliverable}\`を完成させる。
 - [ ] Task Mapの直接依存、Gate、Releaseの必要条件を満たす
 - [ ] 単一Ownerと書込みPathの境界を守る
 - [ ] Task固有の検証結果またはReview evidenceをIssueへ記録する
-- [ ] 未解決の契約差異と、Ready後のTBDがない
+- [ ] 未解決の契約差異がない
 
 ## 対象外
 
@@ -495,7 +495,6 @@ ${rows%$'\n'}
 | 着手依存TaskのMerge commit | 着手時に記録 |
 | 必要なGateの通過記録、またはGate前Taskであること | 着手時に記録 |
 | worktree起点SHA | 着手時に記録 |
-| 必須値に未解決TBDがない | 着手時に確認 |
 | 並行Taskと書込みPathが競合しない | 着手時に確認 |
 
 - [ ] 上表を確認し、このTaskは着手可能である

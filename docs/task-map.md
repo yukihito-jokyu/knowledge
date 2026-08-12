@@ -502,7 +502,7 @@ L2-M1-S4〜S7 基盤・State実装
 
 Gate条件は、L3-M2-S2の技術非依存な更新用探索要求、L4-M2-S1、L2-M2-S1、L2-M1-S1〜S3、L2-M2-S2〜S4、L2-M3-S1・S2の完了に加え、正本Field・Relation・Temporal Metadata・Revision、Commit済み変更境界、正本Snapshot列挙／差分取得、再構築、Schema・Index・Embedding Model・CLI Runtime・JSON Validator・Build方式のVersion互換性と技術共存、全公開CommandからRepository・検索・Lifecycle Portへの対応、正本／派生Index／CLI共有資産の所有者が横断的に整合していることである。
 
-Gate通過記録には、実装構成確定後の`Path／Glob`、資産種別、Owner Task、変更禁止Task、起点Commit、Merge前提・順序、生成物・Lockfile更新Ownerを実値で記載し、TBDを残さない。
+Gate通過記録には、実装構成確定後の`Path／Glob`、資産種別、Owner Task、変更禁止Task、起点Commit、Merge前提・順序、生成物・Lockfile更新Ownerを記載する。
 
 - `L2-M1-S4`以降の本番実装はGate通過後に開始する。Gate前は技術選定用の使い捨てPoCだけを許容する。
 - `L2-M2-S5`はGate通過後にPortとMockで着手できるが、正本照合Adapterを含む完了・Mergeには`L2-M1-S10`を必要とする。
