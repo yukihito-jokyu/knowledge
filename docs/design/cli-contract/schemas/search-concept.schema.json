@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "search-conceptの入出力",
+  "description": "指定概念を含む主張候補を取得するJSON。概念の正しさをCLIが決めるための入力ではない。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "cli-contract.schema.json#/$defs/searchPageRequest"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "concept"
+          ],
+          "properties": {
+            "concept": {
+              "$ref": "cli-contract.schema.json#/$defs/nonEmptyText",
+              "description": "検索の手掛かりとなる空でない概念名又は概念表現。"
+            },
+            "scope": {
+              "$ref": "cli-contract.schema.json#/$defs/scope"
+            },
+            "page_size": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "top_k": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "continuation_token": {
+              "$ref": "cli-contract.schema.json#/$defs/nonEmptyText"
+            }
+          }
+        }
+      ]
+    },
+    "success": {
+      "allOf": [
+        {
+          "$ref": "cli-contract.schema.json#/$defs/success"
+        },
+        {
+          "properties": {
+            "result": {
+              "$ref": "cli-contract.schema.json#/$defs/searchCollection"
+            }
+          }
+        }
+      ]
+    },
+    "error": {
+      "$ref": "cli-contract.schema.json#/$defs/errorResponse"
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "request"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "success"
+            ]
+          },
+          {
+            "required": [
+              "error"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "required": [
+        "success"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "request"
+            ]
+          },
+          {
+            "required": [
+              "error"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "required": [
+        "error"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "request"
+            ]
+          },
+          {
+            "required": [
+              "success"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

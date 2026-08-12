@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "getの入出力",
+  "description": "主張の現在版又は指定改訂版を取得するJSON。履歴を含める指定は削除・変更の権限を与えない。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assertion_id"
+      ],
+      "properties": {
+        "assertion_id": {
+          "$ref": "cli-contract.schema.json#/$defs/identifier",
+          "description": "取得対象の既存主張。"
+        },
+        "revision_id": {
+          "$ref": "cli-contract.schema.json#/$defs/identifier",
+          "description": "指定時だけ取得する、その主張に属する保存済み改訂版。"
+        },
+        "include_history": {
+          "type": "boolean",
+          "default": false,
+          "description": "履歴参照情報を結果へ含めるか。通常の単一取得を不必要に大きくしないため既定はfalse。"
+        },
+        "page_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "continuation_token": {
+          "$ref": "cli-contract.schema.json#/$defs/nonEmptyText"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "page_size"
+                ]
+              },
+              {
+                "required": [
+                  "continuation_token"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "include_history": {
+                "const": true
+              }
+            },
+            "required": [
+              "include_history"
+            ]
+          }
+        }
+      ]
+    },
+    "success": {
+      "allOf": [
+        {
+          "$ref": "cli-contract.schema.json#/$defs/success"
+        },
+        {
+          "properties": {
+            "result": {
+              "$ref": "cli-contract.schema.json#/$defs/singleResult"
+            }
+          }
+        }
+      ]
+    },
+    "error": {
+      "$ref": "cli-contract.schema.json#/$defs/errorResponse"
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "request"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "success"
+            ]
+          },
+          {
+            "required": [
+              "error"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "required": [
+        "success"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "request"
+            ]
+          },
+          {
+            "required": [
+              "error"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "required": [
+        "error"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "request"
+            ]
+          },
+          {
+            "required": [
+              "success"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
