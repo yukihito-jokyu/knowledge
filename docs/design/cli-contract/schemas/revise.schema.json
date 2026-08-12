@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "reviseの入出力",
+  "description": "既存主張・根拠・関係を改訂し、旧版を保持するJSON。削除や上書きで来歴を失わないために必要である。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "cli-contract.schema.json#/$defs/updateCommon"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation_id",
+            "decided_by",
+            "decision_rationale",
+            "expected_revisions",
+            "affected_assertion_ids",
+            "target_kind",
+            "target_id",
+            "replacement"
+          ],
+          "properties": {
+            "operation_id": {
+              "$ref": "cli-contract.schema.json#/$defs/operationId"
+            },
+            "decided_by": {
+              "$ref": "cli-contract.schema.json#/$defs/actor"
+            },
+            "decision_rationale": {
+              "$ref": "cli-contract.schema.json#/$defs/nonEmptyText"
+            },
+            "expected_revisions": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "cli-contract.schema.json#/$defs/expectedRevision"
+              }
+            },
+            "affected_assertion_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "$ref": "cli-contract.schema.json#/$defs/identifier"
+              }
+            },
+            "target_kind": {
+              "enum": [
+                "assertion",
+                "evidence",
+                "relation"
+              ],
+              "description": "改訂対象の記録種別。assertionは知識命題、evidenceは根拠、relationは記録間の関係である。derived_stateは根拠から再計算する状態で直接改訂せず、不明な種別や複数種別の一括指定も許可しない。"
+            },
+            "target_id": {
+              "$ref": "cli-contract.schema.json#/$defs/identifier",
+              "description": "target_kindに一致する既存記録。"
+            },
+            "replacement": {
+              "$ref": "cli-contract.schema.json#/$defs/replacementInput",
+              "description": "改訂後の内容。変更箇所を省略してCLIへ推測させない。"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "target_kind": {
+                    "const": "assertion"
+                  }
+                },
+                "required": [
+                  "target_kind"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "replacement": {
+                    "$ref": "cli-contract.schema.json#/$defs/assertionInput"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "target_kind": {
+                    "const": "evidence"
+                  }
+                },
+                "required": [
+                  "target_kind"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "replacement": {
+                    "$ref": "cli-contract.schema.json#/$defs/evidenceInput"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "target_kind": {
+                    "const": "relation"
+                  }
+                },
+                "required": [
+                  "target_kind"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "replacement": {
+                    "$ref": "cli-contract.schema.json#/$defs/relationInput"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "success": {
+      "allOf": [
+        {
+          "$ref": "cli-contract.schema.json#/$defs/success"
+        },
+        {
+          "properties": {
+            "result": {
+              "$ref": "cli-contract.schema.json#/$defs/operationResult"
+            }
+          }
+        }
+      ]
+    },
+    "error": {
+      "$ref": "cli-contract.schema.json#/$defs/errorResponse"
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "request"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "success"
+            ]
+          },
+          {
+            "required": [
+              "error"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "required": [
+        "success"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "request"
+            ]
+          },
+          {
+            "required": [
+              "error"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "required": [
+        "error"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "request"
+            ]
+          },
+          {
+            "required": [
+              "success"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

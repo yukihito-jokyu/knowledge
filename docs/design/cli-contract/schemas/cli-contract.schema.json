@@ -1,0 +1,868 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge.local/schemas/cli-contract.schema.json",
+  "title": "知識基盤CLIの共通JSON契約",
+  "description": "Codexと知識基盤CLIの間で標準入力・標準出力に渡すJSONを検証する共通定義である。CLIは意味判断をせず、ここで許可した構造だけを決定的に取得・保存するために必要である。",
+  "$defs": {
+    "nonEmptyText": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "description": "前後の空白を除いて1文字以上ある文字列。空の検索条件、根拠、判断理由を有効な内容として受理しないために必要である。"
+    },
+    "identifier": {
+      "$ref": "#/$defs/nonEmptyText",
+      "description": "保存済みの主張、根拠、関係、改訂版を一意に指す空でない識別子。別の記録へ読み替えないために必要である。"
+    },
+    "operationId": {
+      "$ref": "#/$defs/nonEmptyText",
+      "description": "更新要求を一意に結ぶ呼出し元の操作識別子。同一の正規化要求の再送を二重更新にしないために必要であり、新規記録の識別子ではない。"
+    },
+    "isoDateTime": {
+      "type": "string",
+      "format": "date-time",
+      "description": "時点を比較可能に表すISO 8601日時文字列。空文字列、日時以外の任意文は許可しない。"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "facets": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "technology",
+                  "programming_language",
+                  "product"
+                ],
+                "description": "適用範囲を分類する種類。technologyは技術分野、programming_languageはプログラミング言語、productは対象製品である。自由なタグ、根拠種別、利用者名をこの分類へ混ぜず、値はvalueへ置く。"
+              },
+              "value": {
+                "$ref": "#/$defs/nonEmptyText",
+                "description": "分類した適用範囲の値。空値で全範囲を表すことを禁止する。"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "facets"
+      ],
+      "description": "主張や検索を追加で限定する意味的適用範囲。省略は追加の絞込みなしであり、全範囲に成立するという主張とは異なる。"
+    },
+    "pageRequest": {
+      "type": "object",
+      "properties": {
+        "page_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20,
+          "description": "一回の応答に含める最大要素数。候補範囲ではなく応答の分割量を決めるため、0、負数、小数、101以上を禁止する。"
+        },
+        "continuation_token": {
+          "$ref": "#/$defs/nonEmptyText",
+          "description": "前ページから受け取った次ページ用の不透明な値。初回要求では省略し、呼出し元が作成・変更してはならない。"
+        }
+      }
+    },
+    "relationMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relation_id",
+        "relation_kind",
+        "direction"
+      ],
+      "properties": {
+        "relation_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "起点主張と候補主張を結ぶ保存済み関係の識別子。相手側主張を同じ結果へ集約しても到達理由を失わないために必要である。"
+        },
+        "relation_kind": {
+          "$ref": "#/$defs/nonEmptyText",
+          "description": "保存済み関係の種別。説明文や順位値ではなく、要求のrelation_kindsと照合する機械識別名である。"
+        },
+        "direction": {
+          "enum": [
+            "outgoing",
+            "incoming"
+          ],
+          "description": "起点から候補へ向かう関係はoutgoing、候補から起点へ向かう関係はincoming。bothは要求時の探索範囲であり、一つの関係対応には使わない。"
+        }
+      },
+      "description": "search-relatedで候補へ到達した一件の保存済み関係。新たな推論結果ではなく、既に保存された関係だけを表す。"
+    },
+    "derivedStateContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state_kind",
+        "value",
+        "computed_from"
+      ],
+      "properties": {
+        "state_kind": {
+          "$ref": "#/$defs/nonEmptyText",
+          "description": "根拠と主張から再計算した状態の分類名。主張本文や根拠種別と混同しないために必要である。"
+        },
+        "value": {
+          "$ref": "#/$defs/nonEmptyText",
+          "description": "再計算した状態の値。空値で計算済みと見せないため必須にする。"
+        },
+        "computed_from": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "description": "状態の計算に使った保存記録の重複なし識別子一覧。計算根拠を追跡し、直接改訂対象と区別するために必要である。"
+        }
+      },
+      "description": "保存済み主張・根拠から算出する派生状態の内容。呼出し元が直接更新する主張、根拠、関係とは異なる。"
+    },
+    "recordContent": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/assertionInput"
+        },
+        {
+          "$ref": "#/$defs/evidenceInput"
+        },
+        {
+          "$ref": "#/$defs/relationInput"
+        },
+        {
+          "$ref": "#/$defs/derivedStateContent"
+        }
+      ],
+      "description": "返却又は更新した保存記録の具体的な内容。主張、根拠、関係、派生状態のいずれか一つだけを完全な形で持ち、識別子だけの結果を禁止する。"
+    },
+    "recordReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "revision_id",
+        "record_kind",
+        "content",
+        "provenance"
+      ],
+      "properties": {
+        "record_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "返却又は更新した保存記録の識別子。呼出し側が後続取得・更新で対象を一意に指定するために必要である。"
+        },
+        "revision_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "返却時点の保存済み改訂版の識別子。現在版と過去版を取り違えないために必要である。"
+        },
+        "record_kind": {
+          "enum": [
+            "assertion",
+            "evidence",
+            "relation",
+            "derived_state"
+          ],
+          "description": "返す保存記録の種類。assertionは知識命題、evidenceは根拠、relationは記録間の関係、derived_stateは再計算済み状態である。操作IDや検索結果の種類は記録種類ではないため指定しない。"
+        },
+        "content": {
+          "$ref": "#/$defs/recordContent",
+          "description": "record_kindに対応する記録の具体内容。識別子、改訂版、来歴だけでは取得・更新した知識を確認できないため必須にする。"
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_kind",
+            "source_id"
+          ],
+          "properties": {
+            "source_kind": {
+              "enum": [
+                "assertion",
+                "evidence",
+                "relation",
+                "operation"
+              ],
+              "description": "この記録を返す直接の由来の種類。assertionは主張、evidenceは根拠、relationは記録間の関係、operationは更新操作である。検索順位や利用者名は由来ではないため禁止する。"
+            },
+            "source_id": {
+              "$ref": "#/$defs/identifier",
+              "description": "source_kindで示した由来記録又は操作の識別子。由来の種類だけでは追跡不能なため必須にする。"
+            }
+          },
+          "description": "記録の由来又は主張・根拠・関係との結び付きを表す情報。識別子だけで内容の根拠を失わないために必要である。"
+        },
+        "score": {
+          "type": "number",
+          "description": "検索条件への相対的な順位値。検索集合では必須にし、履歴・単一取得では順位付けを意味しないため省略する。"
+        },
+        "relations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/relationMatch"
+          },
+          "description": "search-relatedで同じ候補主張へ到達した関係の重複なし対応一覧。relation_id昇順で返し、一関係だけの場合も配列にすることで複数経路と同じ形式で扱う。"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "record_kind": {
+                "const": "assertion"
+              }
+            },
+            "required": [
+              "record_kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content": {
+                "$ref": "#/$defs/assertionInput"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "record_kind": {
+                "const": "evidence"
+              }
+            },
+            "required": [
+              "record_kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content": {
+                "$ref": "#/$defs/evidenceInput"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "record_kind": {
+                "const": "relation"
+              }
+            },
+            "required": [
+              "record_kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content": {
+                "$ref": "#/$defs/relationInput"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "record_kind": {
+                "const": "derived_state"
+              }
+            },
+            "required": [
+              "record_kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content": {
+                "$ref": "#/$defs/derivedStateContent"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "searchRecordReference": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/recordReference"
+        },
+        {
+          "type": "object",
+          "required": [
+            "score"
+          ]
+        }
+      ],
+      "description": "検索で返す一件。記録識別子、改訂版、来歴に加え、同じ検索結果内で並びを説明する順位値を必須にする。"
+    },
+    "relatedRecordReference": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/searchRecordReference"
+        },
+        {
+          "type": "object",
+          "required": [
+            "relations"
+          ]
+        }
+      ],
+      "description": "関係検索で返す一件。一般検索の順位値に加え、候補を返した保存済み関係の重複なし一覧を必須にし、CLIが関係を推論したように見せない。"
+    },
+    "operationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation_id",
+        "status",
+        "records"
+      ],
+      "properties": {
+        "operation_id": {
+          "$ref": "#/$defs/operationId",
+          "description": "確定又は再開対象の更新操作を識別する値。要求との対応を追跡するために必要である。"
+        },
+        "status": {
+          "enum": [
+            "committed",
+            "no_change"
+          ],
+          "description": "更新全体が確定した状態。committedは新規又は改訂記録を確定した状態、no_changeは同じ操作IDの再送などで既存の確定結果を返す状態である。部分確定、再計算未完了、失敗は成功状態に含めずエラー応答で表す。"
+        },
+        "records": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/recordReference"
+          },
+          "description": "今回作成又は改訂した記録と各改訂版。更新効果と来歴を機械的に確認するために必要である。"
+        }
+      }
+    },
+    "singleResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record"
+      ],
+      "properties": {
+        "record": {
+          "$ref": "#/$defs/recordReference",
+          "description": "単一取得した主張又は根拠の識別子、改訂版、来歴。"
+        },
+        "history": {
+          "$ref": "#/$defs/collection",
+          "description": "include_history指定時だけ返し得る履歴参照の集合。"
+        }
+      }
+    },
+    "evidenceResult": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/singleResult"
+        },
+        {
+          "$ref": "#/$defs/collection"
+        }
+      ],
+      "description": "get-evidenceの成功結果。evidence_idを指定した単一根拠はsingleResult、指定しない主張配下の根拠一覧はcollectionで返す。両方を同じ応答に混在させない。"
+    },
+    "collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items",
+        "returned_count",
+        "has_more"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "このページで返す要素。空配列は最終ページだけに許可する。",
+          "items": {
+            "$ref": "#/$defs/recordReference",
+            "description": "検索・履歴・根拠取得で返す一件。記録識別子、改訂版、来歴を必須にし、候補の出所を追跡可能にする。"
+          }
+        },
+        "returned_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "このページで実際に返した要素数。itemsの配列長と一致しなければならず、総件数ではない。"
+        },
+        "has_more": {
+          "type": "boolean",
+          "description": "次ページがあるか。trueなら継続トークンを必須、falseなら継続トークンを禁止する。"
+        },
+        "continuation_token": {
+          "$ref": "#/$defs/nonEmptyText",
+          "description": "has_more=trueの場合だけ存在する次ページ用の不透明な値。空文字列や終端時の値を禁止する。"
+        },
+        "total_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "要求時点で正確に算出できる場合だけ返す全件数。推定値は許可しない。"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "has_more": {
+                "const": true
+              }
+            },
+            "required": [
+              "has_more"
+            ]
+          },
+          "then": {
+            "required": [
+              "continuation_token"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "continuation_token"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "items": {
+                "maxItems": 0
+              }
+            },
+            "required": [
+              "items"
+            ]
+          },
+          "then": {
+            "properties": {
+              "has_more": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "searchCollection": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/collection"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/searchRecordReference"
+              }
+            }
+          }
+        }
+      ],
+      "description": "検索結果のページ集合。一般の集合に、各候補の識別子・改訂版・来歴・順位値を必須化する。履歴・根拠集合には使わない。"
+    },
+    "relatedCollection": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/collection"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/relatedRecordReference"
+              }
+            }
+          }
+        }
+      ],
+      "description": "関係検索のページ集合。検索順位値だけでなく、候補を結ぶ関係の識別子・種別・方向を必須にする。"
+    },
+    "searchPageRequest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/pageRequest"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "top_k": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100,
+              "description": "順位順の検索候補を何件まで対象集合に残すかを決める上限。ページサイズとは異なり、履歴・根拠取得では指定してはならない。"
+            }
+          }
+        }
+      ]
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_kind"
+      ],
+      "properties": {
+        "actor_kind": {
+          "enum": [
+            "user",
+            "codex",
+            "system"
+          ],
+          "description": "内容を判断した主体の種類。userは一人専用の利用者本人でactor_idを禁止する。codexは意味判断を行うAI、systemは保存・収集など意味判断をしない自動処理で、両者はactor_idを必須とする。外部データのimportは読込み操作であり主体でないため禁止する。"
+        },
+        "actor_id": {
+          "$ref": "#/$defs/nonEmptyText",
+          "description": "codex又はsystemを識別する設定済み名称。userでは一人専用領域のため省略する。"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "actor_kind": {
+                "const": "user"
+              }
+            },
+            "required": [
+              "actor_kind"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "actor_id"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "actor_kind": {
+                "enum": [
+                  "codex",
+                  "system"
+                ]
+              }
+            },
+            "required": [
+              "actor_kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "actor_id"
+            ]
+          }
+        }
+      ]
+    },
+    "expectedRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_kind",
+        "record_id",
+        "revision_id"
+      ],
+      "properties": {
+        "record_kind": {
+          "enum": [
+            "assertion",
+            "evidence",
+            "relation",
+            "derived_state"
+          ],
+          "description": "期待改訂版を読んだ既存記録の種類。assertionは知識命題、evidenceは根拠、relationは記録間の関係、derived_stateは根拠から計算した状態である。新規記録、不明な種別、実行操作を混ぜない。"
+        },
+        "record_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "現在改訂版を確認した既存記録の識別子。"
+        },
+        "revision_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "更新前提にした現在改訂版の識別子。古い前提の上書きを検出するために必要である。"
+        }
+      }
+    },
+    "updateCommon": {
+      "type": "object",
+      "required": [
+        "operation_id",
+        "decided_by",
+        "decision_rationale",
+        "expected_revisions",
+        "affected_assertion_ids"
+      ],
+      "properties": {
+        "operation_id": {
+          "$ref": "#/$defs/operationId"
+        },
+        "decided_by": {
+          "$ref": "#/$defs/actor",
+          "description": "操作、同一性、根拠採否、影響範囲を判断した主体。CLIの実行主体とは異なる。"
+        },
+        "decision_rationale": {
+          "$ref": "#/$defs/nonEmptyText",
+          "description": "判断を後から検証する理由。定型文、操作名だけ、秘密値や根拠本文の無目的な複写は許可しない。"
+        },
+        "expected_revisions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/expectedRevision"
+          },
+          "description": "今回の判断で読んだ既存記録と期待する現在改訂版。createで既存記録を参照しない場合だけ空配列を許可する。"
+        },
+        "affected_assertion_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "description": "状態再計算又は利用停止を検討した主張の識別子。影響がないと判断した場合だけ空配列を許可する。"
+        }
+      }
+    },
+    "assertionInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "content"
+      ],
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/nonEmptyText",
+          "description": "保存又は置換する知識命題の本文。識別子や根拠の参照ではなく、判断対象となる内容そのものを必須にする。"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope",
+          "description": "命題が成り立つ追加の適用範囲。本文に埋め込む曖昧な限定と区別して検索・比較に使う。"
+        },
+        "as_of": {
+          "$ref": "#/$defs/isoDateTime",
+          "description": "命題が確認された時点。保存時刻や根拠発行日とは異なるため、判明している場合だけ指定する。"
+        }
+      },
+      "description": "新規又は置換する主張の入力。CLIが本文を推測して根拠だけを主張として保存しないため、内容を必須にする。"
+    },
+    "evidenceInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_kind",
+        "content",
+        "source"
+      ],
+      "properties": {
+        "evidence_kind": {
+          "enum": [
+            "document",
+            "observation",
+            "test_result"
+          ],
+          "description": "根拠の取得形態。documentは文書・仕様、observationは観測した事実、test_resultは再現可能な試験結果である。主張や関係そのものを根拠種別として指定してはならない。"
+        },
+        "content": {
+          "$ref": "#/$defs/nonEmptyText",
+          "description": "主張を支える引用、観測内容又は試験結果の要約。出典の場所だけでは採否を再確認できないため必須にする。"
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "locator"
+          ],
+          "properties": {
+            "locator": {
+              "$ref": "#/$defs/nonEmptyText",
+              "description": "根拠を再取得できるURL、ファイル位置又は観測記録の場所。内容本文や利用者名ではない。"
+            },
+            "observed_at": {
+              "$ref": "#/$defs/isoDateTime",
+              "description": "根拠を観測又は取得した時点。主張の適用時点とは異なるため、分かる場合だけ指定する。"
+            }
+          },
+          "description": "根拠の再確認先。出典がなく検証不能な本文を確定根拠として保存しないために必要である。"
+        }
+      },
+      "description": "主張を支える根拠の入力。新規根拠ID・改訂版IDはCLIが割り当てるため指定を許可しない。"
+    },
+    "relationInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relation_kind",
+        "target_assertion_id"
+      ],
+      "properties": {
+        "relation_kind": {
+          "$ref": "#/$defs/nonEmptyText",
+          "description": "新規主張から既存主張へ保存する関係の種別。関係の表示文や順位値ではなく、検索に用いる機械識別名である。"
+        },
+        "target_assertion_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "新規主張と結ぶ既存主張の識別子。新規主張自身のIDはCLIが発行するため指定しない。"
+        }
+      },
+      "description": "createで新規主張から既存主張へ追加する関係。既存同士の関係改訂には使わない。"
+    },
+    "replacementInput": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/assertionInput"
+        },
+        {
+          "$ref": "#/$defs/evidenceInput"
+        },
+        {
+          "$ref": "#/$defs/relationInput"
+        }
+      ],
+      "description": "reviseで保存する完全な置換内容。主張は本文、根拠は種別・内容・出典、関係は種別・接続先を必要とする。部分的な差分、ID、改訂版IDは許可せず、target_kindと同種の一形式だけを指定する。"
+    },
+    "supersedesLinkInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "old_assertion_id",
+        "new_assertion_index"
+      ],
+      "properties": {
+        "old_assertion_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "置換される既存主張の識別子。old_assertion_idsに含めた値だけを指定する。"
+        },
+        "new_assertion_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "new_assertions配列内の後継主張を指す0始まりの位置。まだ発行されていない新規IDを入力させず対応関係を機械検証するために必要である。"
+        }
+      },
+      "description": "一件の旧主張と新規主張候補を結ぶ後継関係。置換理由は共通のdecision_rationaleで表し、ここへ重複記録しない。"
+    },
+    "newAssertionInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assertion",
+        "evidence"
+      ],
+      "properties": {
+        "assertion": {
+          "$ref": "#/$defs/assertionInput",
+          "description": "置換後に新規保存する主張の本文と適用範囲。新規記録ID・改訂版IDはCLIが割り当てるため指定しない。"
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/evidenceInput"
+          },
+          "description": "この新規主張を支える一件以上の重複なし根拠。旧主張の根拠を暗黙に引き継がず、新しい主張ごとに採用根拠を明示する。"
+        }
+      },
+      "description": "supersedeで作る一件の後継主張と、その根拠。主張だけ又は根拠だけを新規後継として保存することを禁止する。"
+    },
+    "errorResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "error"
+      ],
+      "properties": {
+        "ok": {
+          "const": false,
+          "description": "失敗応答であることを示す固定値。成功応答と同じ出力経路で安全に分岐するために必要である。"
+        },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "retryable",
+            "diagnostic"
+          ],
+          "properties": {
+            "code": {
+              "enum": [
+                "INPUT_INVALID",
+                "TARGET_NOT_FOUND",
+                "CONFLICT",
+                "CONSTRAINT_VIOLATION",
+                "UNAVAILABLE",
+                "STATE_RECALCULATION_REQUIRED",
+                "INTERNAL_FAILURE"
+              ],
+              "description": "失敗の機械識別子。INPUT_INVALIDは要求単体の形式不備、TARGET_NOT_FOUNDは指定対象の不存在、CONFLICTは期待改訂版又は操作IDの衝突、CONSTRAINT_VIOLATIONは保存済み記録との整合性違反、UNAVAILABLEは安全に再試行できる一時利用不能、STATE_RECALCULATION_REQUIREDは主変更保存後の再計算未完了、INTERNAL_FAILUREは再試行安全性を確認できない未分類障害である。検索の0件は成功であり、この列挙に含めない。"
+            },
+            "retryable": {
+              "type": "boolean",
+              "description": "同一の論理要求を安全に再試行できるか。入力修正、競合解消、内部障害を一時障害と混同しないために必要である。"
+            },
+            "diagnostic": {
+              "$ref": "#/$defs/nonEmptyText",
+              "description": "安全に表示できる短い診断。秘密情報、根拠本文、内部スタックトレースを含めない。"
+            },
+            "target_id": {
+              "$ref": "#/$defs/identifier",
+              "description": "特定できる場合だけ返す対象又は入力項目の識別子。対象不在の有無を漏らさないため、未特定時は省略する。"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/operationId",
+              "description": "受理済み更新で再開・確定結果の照合に使う操作識別子。取得失敗や受理前の入力不備では省略する。"
+            }
+          }
+        }
+      }
+    },
+    "success": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "result"
+      ],
+      "properties": {
+        "ok": {
+          "const": true,
+          "description": "成功応答であることを示す固定値。"
+        },
+        "result": {
+          "type": "object",
+          "description": "コマンド固有の取得又は確定結果。エラー詳細を混ぜない。"
+        }
+      }
+    }
+  }
+}

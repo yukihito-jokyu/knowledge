@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "attach-evidenceの入出力",
+  "description": "既存主張へ一件以上の根拠を追加するJSON。既存の根拠・履歴を置き換えないために必要である。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "cli-contract.schema.json#/$defs/updateCommon"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation_id",
+            "decided_by",
+            "decision_rationale",
+            "expected_revisions",
+            "affected_assertion_ids",
+            "assertion_id",
+            "evidence"
+          ],
+          "properties": {
+            "operation_id": {
+              "$ref": "cli-contract.schema.json#/$defs/operationId"
+            },
+            "decided_by": {
+              "$ref": "cli-contract.schema.json#/$defs/actor"
+            },
+            "decision_rationale": {
+              "$ref": "cli-contract.schema.json#/$defs/nonEmptyText"
+            },
+            "expected_revisions": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "cli-contract.schema.json#/$defs/expectedRevision"
+              }
+            },
+            "affected_assertion_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "$ref": "cli-contract.schema.json#/$defs/identifier"
+              }
+            },
+            "assertion_id": {
+              "$ref": "cli-contract.schema.json#/$defs/identifier",
+              "description": "根拠の追加先となる既存主張。"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "cli-contract.schema.json#/$defs/evidenceInput"
+              },
+              "description": "追加する一件以上の根拠。"
+            }
+          }
+        }
+      ]
+    },
+    "success": {
+      "allOf": [
+        {
+          "$ref": "cli-contract.schema.json#/$defs/success"
+        },
+        {
+          "properties": {
+            "result": {
+              "$ref": "cli-contract.schema.json#/$defs/operationResult"
+            }
+          }
+        }
+      ]
+    },
+    "error": {
+      "$ref": "cli-contract.schema.json#/$defs/errorResponse"
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "request"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "success"
+            ]
+          },
+          {
+            "required": [
+              "error"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "required": [
+        "success"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "request"
+            ]
+          },
+          {
+            "required": [
+              "error"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "required": [
+        "error"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "request"
+            ]
+          },
+          {
+            "required": [
+              "success"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

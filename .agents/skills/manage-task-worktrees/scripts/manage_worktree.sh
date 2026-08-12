@@ -69,7 +69,7 @@ require_primary_checkout() {
 load_repository_slug() {
   need_command gh
   repo_slug="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)" ||
-    die "GitHub repositoryを特定できません。gh auth statusとoriginを確認してください"
+    die "GitHub repositoryを特定できません。originまたはGitHub操作の実際のエラーを確認してください"
 }
 
 validate_issue_number() {

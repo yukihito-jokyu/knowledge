@@ -3,7 +3,7 @@
 ## 前提
 
 - Primary checkoutのリポジトリ直下から実行する。
-- `git`、`gh`、`code`を利用でき、`gh auth status`が成功する。
+- `git`、`gh`、`code`を利用できる。GitHubの認証状態は開始条件に含めない。認証を必要とする操作が失敗した場合は、その操作と実際のエラーを報告し、認証操作を推測して案内・実行しない。
 - `/.worktrees/`と`/.codex/task-session.local.md`が`.gitignore`に登録されている。
 - 実行対象は`Lx-My-Sz`形式のleaf Task Issueである。
 - 固定Planning snapshotのTask Mapと接続台帳を依存DAG・Gate・Ownerの正本とし、GitHub Issue本文を実行用の同期コピーとして照合する。固定後の承認済み決定記録が置換対象、承認日、承認内容、影響Taskを特定している項目だけは、その後発決定を正しい値として適用する。差異があっても正本と正しい値を特定できる場合は、同期差異を記録して正本に従い続行する。
