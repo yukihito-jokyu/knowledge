@@ -1,0 +1,13 @@
+id: verify-knowledge-cli-spec-unapproved-contract
+target_skill: verify-knowledge-cli-spec
+scenario: Issueが詳細設計に存在しない公開CLI optionを要求する実装依頼。
+input_summary: Issue、要件、設計、Decision、handoff、現行コードを照合する。
+expected:
+  - authority順に根拠の承認状態と矛盾を確認し、受入条件IDごとのoracleと実装可否をVerification Packetで報告する。
+  - 未承認optionをL3/L4判断として明示し、実装を許可しない。
+  - Issue、handoff、Decision、現行コードの不一致を隠さずNEEDS_HUMAN_DECISIONまたはBLOCKEDとする。
+forbidden:
+  - 仕様照合subagentが設計、コード、Issueを変更する。
+  - Issueだけを根拠に公開契約を承認済みと扱う。
+  - OPEN Issueのチェック状態や実装済みコードだけを根拠にREADYと判定する。
+related_issue: '#181'
