@@ -1,0 +1,505 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/yukihito-jokyu/knowledge/internal/domain"
+	"github.com/yukihito-jokyu/knowledge/internal/persistence/sqlite"
+)
+
+func TestExecuteRetrievalWithStore(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	tests := []struct {
+		name        string
+		arguments   []string
+		store       retrievalStoreStub
+		wantHandled bool
+		wantCode    errorCode
+		wantData    bool
+		wantContext bool
+	}{
+		{
+			name: "search-text",
+			arguments: []string{
+				"search-text",
+				"--query",
+				"channel",
+			},
+			wantHandled: true,
+			wantData:    true,
+			wantContext: true,
+		},
+		{
+			name: "search-concept",
+			arguments: []string{
+				"search-concept",
+				"--concept",
+				"channel",
+			},
+			wantHandled: true,
+			wantData:    true,
+			wantContext: true,
+		},
+		{
+			name: "get",
+			arguments: []string{
+				"get",
+				"--assertion-id",
+				"asrt_01",
+			},
+			wantHandled: true,
+			wantData:    true,
+			wantContext: true,
+		},
+		{
+			name: "get-evidence",
+			arguments: []string{
+				"get-evidence",
+				"--assertion-id",
+				"asrt_01",
+			},
+			wantHandled: true,
+			wantData:    true,
+			wantContext: true,
+		},
+		{
+			name: "対象外の操作",
+			arguments: []string{
+				"search-related",
+				"--seed-kind",
+				"assertion",
+				"--seed-id",
+				"asrt_01",
+			},
+		},
+		{
+			name: "getのnot_found",
+			arguments: []string{
+				"get",
+				"--assertion-id",
+				"asrt_01",
+			},
+			store:       retrievalStoreStub{getError: domain.ErrAssertionNotFound},
+			wantHandled: true,
+			wantCode:    notFoundError,
+		},
+		{
+			name: "getのstorage_error",
+			arguments: []string{
+				"get",
+				"--assertion-id",
+				"asrt_01",
+			},
+			store:       retrievalStoreStub{getError: errors.New("read failure")},
+			wantHandled: true,
+			wantCode:    storageError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, parseError := parseCommand(tt.arguments)
+			if parseError.code != "" {
+				t.Fatalf("%v をparseする: %v", tt.arguments, parseError)
+			}
+			var received context.Context
+			store := tt.store
+			store.receivedContext = &received
+			data, executionError, handled := executeRetrievalWithStore(ctx, parsed, store)
+			if handled != tt.wantHandled || executionError.code != tt.wantCode || (data != nil) != tt.wantData {
+				t.Fatalf("executeRetrievalWithStore(%v) = %#v, %#v, %t", tt.arguments, data, executionError, handled)
+			}
+			if tt.wantContext && received != ctx {
+				t.Fatal("ContextがStoreへ伝播しません")
+			}
+		})
+	}
+}
+
+func TestExecuteRetrievalUsesDefaultStore(t *testing.T) {
+	originalUserConfigDir := userConfigDir
+	originalOpenSQLiteStore := openSQLiteStore
+	t.Cleanup(func() {
+		userConfigDir = originalUserConfigDir
+		openSQLiteStore = originalOpenSQLiteStore
+	})
+	tests := []struct {
+		name        string
+		open        func(*context.Context) func(context.Context, string) (*sqlite.Store, error)
+		wantCode    errorCode
+		wantData    bool
+		wantContext bool
+	}{
+		{
+			name: "ContextをSQLiteへ伝播する",
+			open: func(received *context.Context) func(context.Context, string) (*sqlite.Store, error) {
+				return func(got context.Context, path string) (*sqlite.Store, error) {
+					*received = got
+
+					return sqlite.Open(got, path)
+				}
+			},
+			wantData:    true,
+			wantContext: true,
+		},
+		{
+			name: "Store open失敗",
+			open: func(*context.Context) func(context.Context, string) (*sqlite.Store, error) {
+				return func(context.Context, string) (*sqlite.Store, error) {
+					return nil, errors.New("open failure")
+				}
+			},
+			wantCode: storageError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			userConfigDir = func() (string, error) { return t.TempDir(), nil }
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			var received context.Context
+			openSQLiteStore = tt.open(&received)
+			parsed, parseError := parseCommand([]string{"search-text", "--query", "channel"})
+			if parseError.code != "" {
+				t.Fatalf("search-textをparseする: %v", parseError)
+			}
+			data, executionError, handled := executeRetrieval(ctx, parsed)
+			if !handled || executionError.code != tt.wantCode || (data != nil) != tt.wantData {
+				t.Fatalf("executeRetrieval() = %#v, %#v, %t", data, executionError, handled)
+			}
+			if tt.wantContext && received != ctx {
+				t.Fatal("composition rootがContextをSQLiteへ伝播しません")
+			}
+		})
+	}
+}
+
+func TestDefaultStorePathAndOpenFailures(t *testing.T) {
+	originalUserConfigDir := userConfigDir
+	originalMakeStoreDirectory := makeStoreDirectory
+	originalOpenSQLiteStore := openSQLiteStore
+	t.Cleanup(func() {
+		userConfigDir = originalUserConfigDir
+		makeStoreDirectory = originalMakeStoreDirectory
+		openSQLiteStore = originalOpenSQLiteStore
+	})
+
+	tests := []struct {
+		name string
+		test func(*testing.T)
+	}{
+		{
+			name: "既定Store path",
+			test: func(t *testing.T) {
+				userConfigDir = func() (string, error) { return "/tmp/config", nil }
+				path, err := defaultStorePath()
+				if err != nil || path != filepath.Join("/tmp/config", "knowledge", "knowledge.db") {
+					t.Fatalf("defaultStorePath() = %q, %v", path, err)
+				}
+			},
+		},
+		{
+			name: "設定ディレクトリ解決失敗",
+			test: func(t *testing.T) {
+				userConfigDir = func() (string, error) { return "", errors.New("no config directory") }
+				if _, err := defaultStorePath(); err == nil {
+					t.Fatal("設定ディレクトリ解決失敗を返しません")
+				}
+				if _, err := openDefaultRetrievalStore(context.Background()); err == nil {
+					t.Fatal("Store初期化時に設定ディレクトリ解決失敗を返しません")
+				}
+			},
+		},
+		{
+			name: "Storeディレクトリ作成失敗",
+			test: func(t *testing.T) {
+				userConfigDir = func() (string, error) { return t.TempDir(), nil }
+				makeStoreDirectory = func(string, os.FileMode) error { return errors.New("mkdir failure") }
+				if _, err := openDefaultRetrievalStore(context.Background()); err == nil {
+					t.Fatal("Storeディレクトリ作成失敗を返しません")
+				}
+			},
+		},
+		{
+			name: "開始前の中断",
+			test: func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				if _, err := openDefaultRetrievalStore(ctx); !errors.Is(err, context.Canceled) {
+					t.Fatalf("開始前の中断 = %v", err)
+				}
+			},
+		},
+		{
+			name: "設定ディレクトリ解決後の中断",
+			test: func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				userConfigDir = func() (string, error) {
+					cancel()
+
+					return t.TempDir(), nil
+				}
+				makeStoreDirectory = func(string, os.FileMode) error {
+					t.Fatal("設定ディレクトリ解決後に中断したのにディレクトリを作成しました")
+
+					return nil
+				}
+				if _, err := openDefaultRetrievalStore(ctx); !errors.Is(err, context.Canceled) {
+					t.Fatalf("設定ディレクトリ解決後の中断 = %v", err)
+				}
+			},
+		},
+		{
+			name: "ディレクトリ作成後の中断",
+			test: func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				userConfigDir = func() (string, error) { return t.TempDir(), nil }
+				makeStoreDirectory = func(string, os.FileMode) error {
+					cancel()
+
+					return nil
+				}
+				openSQLiteStore = func(context.Context, string) (*sqlite.Store, error) {
+					t.Fatal("ディレクトリ作成後に中断したのにStoreを開きました")
+
+					return nil, nil
+				}
+				if _, err := openDefaultRetrievalStore(ctx); !errors.Is(err, context.Canceled) {
+					t.Fatalf("ディレクトリ作成後の中断 = %v", err)
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			userConfigDir = originalUserConfigDir
+			makeStoreDirectory = originalMakeStoreDirectory
+			openSQLiteStore = originalOpenSQLiteStore
+			tt.test(t)
+		})
+	}
+}
+
+func TestRetrievalResponse(t *testing.T) {
+	value := "2026-08-14T00:00:00Z"
+	tests := []struct {
+		name    string
+		value   any
+		wantNil bool
+	}{
+		{
+			name: "字句検索結果",
+			value: []domain.AssertionSummary{{
+				ID:             "asrt_01",
+				NormalizedText: "channel send",
+				Revision:       1,
+				Concepts: []domain.Concept{{
+					ID:   "cpt_01",
+					Name: "channel",
+				}},
+				Scope: []domain.Scope{{
+					Key:   "language",
+					Value: "Go",
+				}},
+				MatchedFields: []string{"assertion_text"},
+			}},
+		},
+		{
+			name: "Concept検索結果",
+			value: domain.ConceptSearchResult{
+				Concept: &domain.Concept{
+					ID:   "cpt_01",
+					Name: "channel",
+				},
+				Results: []domain.AssertionSummary{{
+					ID:             "asrt_01",
+					NormalizedText: "channel send",
+					Revision:       1,
+					Scope: []domain.Scope{{
+						Key:   "language",
+						Value: "Go",
+					}},
+				}},
+			},
+		},
+		{
+			name: "Assertion取得結果",
+			value: domain.AssertionDetail{
+				ID:              "asrt_01",
+				CurrentRevision: 1,
+				Revisions: []domain.Revision{{
+					Number:         1,
+					NormalizedText: "channel send",
+					Scope: []domain.Scope{{
+						Key:   "language",
+						Value: "Go",
+					}},
+					Temporal: &domain.Temporal{
+						ValidFrom:    &value,
+						ValidUntil:   &value,
+						VersionScope: &value,
+						ObservedAt:   &value,
+						LastVerified: &value,
+					},
+				}},
+				Concepts: []domain.ConceptDetail{{
+					ID:      "cpt_01",
+					Name:    "channel",
+					Aliases: []string{"chan"},
+				}},
+				Aliases: []domain.AssertionAlias{{
+					Kind:  "identifier",
+					Value: "ch",
+				}},
+			},
+		},
+		{
+			name: "Evidence取得結果",
+			value: domain.EvidenceResult{
+				AssertionID: "asrt_01",
+				Evidence: []domain.Evidence{{
+					ID:         "evd_01",
+					Kind:       "user_code",
+					RawText:    "first",
+					ObservedAt: value,
+				}},
+			},
+		},
+		{
+			name:    "未知のresponse",
+			value:   "unknown",
+			wantNil: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := retrievalResponse(tt.value); (got == nil) != tt.wantNil {
+				t.Fatalf("retrievalResponse() = %#v, wantNil %t", got, tt.wantNil)
+			}
+		})
+	}
+	for _, tt := range []struct {
+		name string
+		call func() any
+	}{
+		{
+			name: "nil Concept",
+			call: func() any { return conceptResponse(nil) },
+		},
+		{
+			name: "nil Temporal",
+			call: func() any { return temporalResponse(nil) },
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.call(); got != nil {
+				t.Fatalf("nil値のresponse = %#v, want nil", got)
+			}
+		})
+	}
+}
+
+func TestRunWithExecutor(t *testing.T) {
+	originalStdout := processStdout
+	t.Cleanup(func() { processStdout = originalStdout })
+	execute := func(_ context.Context, parsed command) (any, cliError, bool) {
+		if parsed.options[0].value == "missing" {
+			return nil, cliError{
+				code:    notFoundError,
+				message: "Assertionが見つかりません",
+			}, true
+		}
+		if parsed.options[0].value == "broken" {
+			return nil, cliError{
+				code:    storageError,
+				message: "Knowledge Storeの読取に失敗しました",
+			}, true
+		}
+
+		return map[string]any{"assertion_id": "asrt_01"}, cliError{}, true
+	}
+
+	tests := []struct {
+		name        string
+		assertionID string
+		wantCode    int
+		wantStdout  bool
+		wantStderr  bool
+	}{
+		{
+			name:        "成功",
+			assertionID: "asrt_01",
+			wantStdout:  true,
+		},
+		{
+			name:        "未検出",
+			assertionID: "missing",
+			wantCode:    3,
+			wantStderr:  true,
+		},
+		{
+			name:        "Storage error",
+			assertionID: "broken",
+			wantCode:    1,
+			wantStderr:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			processStdout = &stdout
+			if got := runWithExecutor(context.Background(), []string{"get", "--assertion-id", tt.assertionID}, &stderr, execute); got != tt.wantCode {
+				t.Fatalf("runWithExecutor() = %d, want %d", got, tt.wantCode)
+			}
+			if (stdout.Len() > 0) != tt.wantStdout || (stderr.Len() > 0) != tt.wantStderr {
+				t.Fatalf("stdout/stderr = %q/%q", stdout.String(), stderr.String())
+			}
+		})
+	}
+}
+
+type retrievalStoreStub struct {
+	getError        error
+	receivedContext *context.Context
+}
+
+func (store retrievalStoreStub) SearchText(ctx context.Context, _ string) ([]domain.AssertionSummary, error) {
+	store.receive(ctx)
+
+	return []domain.AssertionSummary{{ID: "asrt_01"}}, nil
+}
+
+func (store retrievalStoreStub) SearchConcept(ctx context.Context, _ string) (domain.ConceptSearchResult, error) {
+	store.receive(ctx)
+
+	return domain.ConceptSearchResult{}, nil
+}
+
+func (store retrievalStoreStub) GetAssertion(ctx context.Context, _ string) (domain.AssertionDetail, error) {
+	store.receive(ctx)
+	if store.getError != nil {
+		return domain.AssertionDetail{}, store.getError
+	}
+
+	return domain.AssertionDetail{ID: "asrt_01"}, nil
+}
+
+func (store retrievalStoreStub) GetEvidence(ctx context.Context, _ string) (domain.EvidenceResult, error) {
+	store.receive(ctx)
+
+	return domain.EvidenceResult{AssertionID: "asrt_01"}, nil
+}
+
+func (store retrievalStoreStub) receive(ctx context.Context) {
+	if store.receivedContext != nil {
+		*store.receivedContext = ctx
+	}
+}

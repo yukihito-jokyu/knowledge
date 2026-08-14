@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yukihito-jokyu/knowledge/internal/domain"
 	_ "modernc.org/sqlite"
 )
 
@@ -31,6 +32,7 @@ var (
 	loadEmbeddedMigrations       = embeddedMigrations
 	inspectSchemaState           = func(store *Store, ctx context.Context) (schemaStatus, []int, error) { return store.schemaState(ctx) }
 	commitMigration              = func(tx *sql.Tx) error { return tx.Commit() }
+	waitForIntegrationGate       = waitIntegrationGate
 )
 
 var schemaObjects = []string{
@@ -245,6 +247,9 @@ func (s *Store) applyMigrationScripts(ctx context.Context, migrations []migratio
 		return fmt.Errorf("begin schema migration: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := waitForIntegrationGate(ctx, "migration"); err != nil {
+		return err
+	}
 	for _, migration := range migrations {
 		if _, err := tx.ExecContext(ctx, migration.sql); err != nil {
 			return fmt.Errorf("apply schema migration: %w", err)
@@ -316,4 +321,417 @@ func pendingMigrations(migrations []migration, applied []int) ([]migration, erro
 	}
 
 	return migrations[len(applied):], nil
+}
+
+const searchTextSQL = `
+WITH candidate AS (
+  SELECT assertion_id FROM assertion_lexical_index
+  WHERE assertion_lexical_index MATCH ?
+), ranked AS (
+  SELECT candidate.assertion_id,
+         EXISTS (SELECT 1 FROM assertion_lexical_index WHERE assertion_id = candidate.assertion_id AND assertion_lexical_index MATCH ('normalized_text : ' || ?)) AS assertion_text_hit,
+         (EXISTS (SELECT 1 FROM assertion_lexical_index WHERE assertion_id = candidate.assertion_id AND assertion_lexical_index MATCH ('concept_name : ' || ?)) OR EXISTS (SELECT 1 FROM assertion_lexical_index WHERE assertion_id = candidate.assertion_id AND assertion_lexical_index MATCH ('concept_alias : ' || ?))) AS concept_hit,
+         EXISTS (SELECT 1 FROM assertion_lexical_index WHERE assertion_id = candidate.assertion_id AND assertion_lexical_index MATCH ('assertion_alias : ' || ?)) AS alias_hit,
+         EXISTS (SELECT 1 FROM assertion_lexical_index WHERE assertion_id = candidate.assertion_id AND assertion_lexical_index MATCH ('scope_key : ' || ?)) AS scope_key_hit,
+         EXISTS (SELECT 1 FROM assertion_lexical_index WHERE assertion_id = candidate.assertion_id AND assertion_lexical_index MATCH ('scope_value : ' || ?)) AS scope_value_hit
+  FROM candidate
+)
+SELECT a.assertion_id, r.normalized_text, a.current_revision,
+       assertion_text_hit, concept_hit, alias_hit, scope_key_hit, scope_value_hit
+FROM ranked
+JOIN assertions AS a ON a.assertion_id = ranked.assertion_id
+JOIN assertion_revisions AS r ON r.assertion_id = a.assertion_id AND r.revision = a.current_revision
+ORDER BY (assertion_text_hit + concept_hit + alias_hit + scope_key_hit + scope_value_hit) DESC, a.assertion_id ASC
+`
+
+const assertionConceptsSQL = `
+SELECT c.concept_id, c.name
+FROM assertion_concepts AS ac
+JOIN concepts AS c ON c.concept_id = ac.concept_id
+WHERE ac.assertion_id = ?
+ORDER BY c.concept_id ASC
+`
+
+const currentScopeSQL = `
+SELECT s.scope_key, s.scope_value
+FROM revision_scopes AS s
+JOIN assertions AS a ON a.assertion_id = s.assertion_id AND a.current_revision = s.revision
+WHERE s.assertion_id = ?
+ORDER BY s.scope_key ASC
+`
+
+// SearchText は現行Assertionを字句検索する。
+func (s *Store) SearchText(ctx context.Context, query string) ([]domain.AssertionSummary, error) {
+	phrase := ftsPhrase(query)
+	rows, err := s.db.QueryContext(ctx, searchTextSQL, phrase, phrase, phrase, phrase, phrase, phrase, phrase)
+	if err != nil {
+		return nil, fmt.Errorf("search text: %w", err)
+	}
+	defer rows.Close()
+
+	results := make([]domain.AssertionSummary, 0)
+	for rows.Next() {
+		var result domain.AssertionSummary
+		var textHit, conceptHit, aliasHit, scopeKeyHit, scopeValueHit bool
+		if err := rows.Scan(&result.ID, &result.NormalizedText, &result.Revision, &textHit, &conceptHit, &aliasHit, &scopeKeyHit, &scopeValueHit); err != nil {
+			return nil, fmt.Errorf("read text search result: %w", err)
+		}
+		result.MatchedFields = matchedFields(textHit, conceptHit, aliasHit, scopeKeyHit, scopeValueHit)
+		results = append(results, result)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate text search result: %w", err)
+	}
+	for index := range results {
+		if err := s.hydrateSummary(ctx, &results[index]); err != nil {
+			return nil, err
+		}
+	}
+
+	return results, nil
+}
+
+func ftsPhrase(value string) string {
+	return `"` + strings.ReplaceAll(value, `"`, `""`) + `"`
+}
+
+func matchedFields(textHit, conceptHit, aliasHit, scopeKeyHit, scopeValueHit bool) []string {
+	fields := make([]string, 0, 5)
+	if textHit {
+		fields = append(fields, "assertion_text")
+	}
+	if conceptHit {
+		fields = append(fields, "concept")
+	}
+	if aliasHit {
+		fields = append(fields, "alias")
+	}
+	if scopeKeyHit {
+		fields = append(fields, "scope_key")
+	}
+	if scopeValueHit {
+		fields = append(fields, "scope_value")
+	}
+
+	return fields
+}
+
+func (s *Store) hydrateSummary(ctx context.Context, result *domain.AssertionSummary) error {
+	concepts, err := s.conceptsForAssertion(ctx, result.ID)
+	if err != nil {
+		return err
+	}
+	scope, err := s.currentScopeForAssertion(ctx, result.ID)
+	if err != nil {
+		return err
+	}
+	result.Concepts = concepts
+	result.Scope = scope
+
+	return nil
+}
+
+func (s *Store) conceptsForAssertion(ctx context.Context, assertionID string) ([]domain.Concept, error) {
+	rows, err := s.db.QueryContext(ctx, assertionConceptsSQL, assertionID)
+	if err != nil {
+		return nil, fmt.Errorf("get assertion concepts: %w", err)
+	}
+	defer rows.Close()
+	concepts := make([]domain.Concept, 0)
+	for rows.Next() {
+		var concept domain.Concept
+		if err := rows.Scan(&concept.ID, &concept.Name); err != nil {
+			return nil, fmt.Errorf("read assertion concept: %w", err)
+		}
+		concepts = append(concepts, concept)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate assertion concepts: %w", err)
+	}
+
+	return concepts, nil
+}
+
+func (s *Store) currentScopeForAssertion(ctx context.Context, assertionID string) ([]domain.Scope, error) {
+	return s.scopeForAssertion(ctx, assertionID)
+}
+
+func (s *Store) scopeForAssertion(ctx context.Context, assertionID string) ([]domain.Scope, error) {
+	rows, err := s.db.QueryContext(ctx, currentScopeSQL, assertionID)
+	if err != nil {
+		return nil, fmt.Errorf("get assertion scope: %w", err)
+	}
+	defer rows.Close()
+	scope := make([]domain.Scope, 0)
+	for rows.Next() {
+		var entry domain.Scope
+		if err := rows.Scan(&entry.Key, &entry.Value); err != nil {
+			return nil, fmt.Errorf("read assertion scope: %w", err)
+		}
+		scope = append(scope, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate assertion scope: %w", err)
+	}
+
+	return scope, nil
+}
+
+const searchConceptSQL = `
+SELECT c.concept_id, c.name, a.assertion_id, r.normalized_text, a.current_revision
+FROM concept_terms AS ct
+JOIN concepts AS c ON c.concept_id = ct.concept_id
+LEFT JOIN assertion_concepts AS ac ON ac.concept_id = c.concept_id
+LEFT JOIN assertions AS a ON a.assertion_id = ac.assertion_id
+LEFT JOIN assertion_revisions AS r ON r.assertion_id = a.assertion_id AND r.revision = a.current_revision
+WHERE ct.term = ?
+ORDER BY a.assertion_id ASC
+`
+
+// SearchConcept はConcept名またはAliasから現行Assertionを取得する。
+func (s *Store) SearchConcept(ctx context.Context, term string) (domain.ConceptSearchResult, error) {
+	rows, err := s.db.QueryContext(ctx, searchConceptSQL, term)
+	if err != nil {
+		return domain.ConceptSearchResult{}, fmt.Errorf("search concept: %w", err)
+	}
+	defer rows.Close()
+	result := domain.ConceptSearchResult{Results: make([]domain.AssertionSummary, 0)}
+	for rows.Next() {
+		var concept domain.Concept
+		var summary domain.AssertionSummary
+		var assertionID sql.NullString
+		var normalizedText sql.NullString
+		var revision sql.NullInt64
+		if err := rows.Scan(&concept.ID, &concept.Name, &assertionID, &normalizedText, &revision); err != nil {
+			return domain.ConceptSearchResult{}, fmt.Errorf("read concept search result: %w", err)
+		}
+		result.Concept = &concept
+		if !assertionID.Valid {
+			continue
+		}
+		summary.ID = assertionID.String
+		summary.NormalizedText = normalizedText.String
+		summary.Revision = int(revision.Int64)
+		result.Results = append(result.Results, summary)
+	}
+	if err := rows.Err(); err != nil {
+		return domain.ConceptSearchResult{}, fmt.Errorf("iterate concept search result: %w", err)
+	}
+	for index := range result.Results {
+		scope, err := s.currentScopeForAssertion(ctx, result.Results[index].ID)
+		if err != nil {
+			return domain.ConceptSearchResult{}, err
+		}
+		result.Results[index].Scope = scope
+	}
+
+	return result, nil
+}
+
+const assertionRevisionsSQL = `
+SELECT a.current_revision, r.revision, r.normalized_text, t.revision,
+       t.valid_from, t.valid_until, t.version_scope, t.observed_at, t.last_verified,
+       s.scope_key, s.scope_value
+FROM assertions AS a
+JOIN assertion_revisions AS r ON r.assertion_id = a.assertion_id
+LEFT JOIN temporal_metadata AS t ON t.assertion_id = r.assertion_id AND t.revision = r.revision
+LEFT JOIN revision_scopes AS s ON s.assertion_id = r.assertion_id AND s.revision = r.revision
+WHERE a.assertion_id = ?
+ORDER BY r.revision ASC, s.scope_key ASC
+`
+
+const assertionConceptDetailsSQL = `
+SELECT c.concept_id, c.name, ca.alias
+FROM assertion_concepts AS ac
+JOIN concepts AS c ON c.concept_id = ac.concept_id
+LEFT JOIN concept_aliases AS ca ON ca.concept_id = c.concept_id
+WHERE ac.assertion_id = ?
+ORDER BY c.concept_id ASC, ca.alias ASC
+`
+
+const assertionAliasesSQL = `
+SELECT alias_kind, alias_value
+FROM assertion_aliases
+WHERE assertion_id = ?
+ORDER BY alias_kind ASC, alias_value ASC
+`
+
+// GetAssertion はAssertionの全revisionと関連データを取得する。
+func (s *Store) GetAssertion(ctx context.Context, assertionID string) (domain.AssertionDetail, error) {
+	if err := waitForIntegrationGate(ctx, "read"); err != nil {
+		return domain.AssertionDetail{}, err
+	}
+	rows, err := s.db.QueryContext(ctx, assertionRevisionsSQL, assertionID)
+	if err != nil {
+		return domain.AssertionDetail{}, fmt.Errorf("get assertion: %w", err)
+	}
+	defer rows.Close()
+	detail := domain.AssertionDetail{
+		ID:        assertionID,
+		Revisions: make([]domain.Revision, 0),
+	}
+	revisionIndexes := make(map[int]int)
+	for rows.Next() {
+		var currentRevision int
+		var revisionNumber int
+		var normalizedText string
+		var temporalRevision sql.NullInt64
+		var validFrom, validUntil, versionScope, observedAt, lastVerified sql.NullString
+		var scopeKey, scopeValue sql.NullString
+		if err := rows.Scan(&currentRevision, &revisionNumber, &normalizedText, &temporalRevision, &validFrom, &validUntil, &versionScope, &observedAt, &lastVerified, &scopeKey, &scopeValue); err != nil {
+			return domain.AssertionDetail{}, fmt.Errorf("read assertion revision: %w", err)
+		}
+		detail.CurrentRevision = currentRevision
+		index, exists := revisionIndexes[revisionNumber]
+		if !exists {
+			revision := domain.Revision{
+				Number:         revisionNumber,
+				NormalizedText: normalizedText,
+				Scope:          make([]domain.Scope, 0),
+			}
+			if temporalRevision.Valid {
+				revision.Temporal = &domain.Temporal{
+					ValidFrom:    nullableString(validFrom),
+					ValidUntil:   nullableString(validUntil),
+					VersionScope: nullableString(versionScope),
+					ObservedAt:   nullableString(observedAt),
+					LastVerified: nullableString(lastVerified),
+				}
+			}
+			detail.Revisions = append(detail.Revisions, revision)
+			index = len(detail.Revisions) - 1
+			revisionIndexes[revisionNumber] = index
+		}
+		if scopeKey.Valid {
+			detail.Revisions[index].Scope = append(detail.Revisions[index].Scope, domain.Scope{
+				Key:   scopeKey.String,
+				Value: scopeValue.String,
+			})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return domain.AssertionDetail{}, fmt.Errorf("iterate assertion revisions: %w", err)
+	}
+	if len(detail.Revisions) == 0 {
+		return domain.AssertionDetail{}, domain.ErrAssertionNotFound
+	}
+	concepts, err := s.conceptDetailsForAssertion(ctx, assertionID)
+	if err != nil {
+		return domain.AssertionDetail{}, err
+	}
+	aliases, err := s.aliasesForAssertion(ctx, assertionID)
+	if err != nil {
+		return domain.AssertionDetail{}, err
+	}
+	detail.Concepts = concepts
+	detail.Aliases = aliases
+
+	return detail, nil
+}
+
+func nullableString(value sql.NullString) *string {
+	if !value.Valid {
+		return nil
+	}
+
+	return &value.String
+}
+
+func (s *Store) conceptDetailsForAssertion(ctx context.Context, assertionID string) ([]domain.ConceptDetail, error) {
+	rows, err := s.db.QueryContext(ctx, assertionConceptDetailsSQL, assertionID)
+	if err != nil {
+		return nil, fmt.Errorf("get assertion concept details: %w", err)
+	}
+	defer rows.Close()
+	concepts := make([]domain.ConceptDetail, 0)
+	for rows.Next() {
+		var id, name string
+		var alias sql.NullString
+		if err := rows.Scan(&id, &name, &alias); err != nil {
+			return nil, fmt.Errorf("read assertion concept detail: %w", err)
+		}
+		if len(concepts) == 0 || concepts[len(concepts)-1].ID != id {
+			concepts = append(concepts, domain.ConceptDetail{
+				ID:      id,
+				Name:    name,
+				Aliases: make([]string, 0),
+			})
+		}
+		if alias.Valid {
+			index := len(concepts) - 1
+			concepts[index].Aliases = append(concepts[index].Aliases, alias.String)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate assertion concept details: %w", err)
+	}
+
+	return concepts, nil
+}
+
+func (s *Store) aliasesForAssertion(ctx context.Context, assertionID string) ([]domain.AssertionAlias, error) {
+	rows, err := s.db.QueryContext(ctx, assertionAliasesSQL, assertionID)
+	if err != nil {
+		return nil, fmt.Errorf("get assertion aliases: %w", err)
+	}
+	defer rows.Close()
+	aliases := make([]domain.AssertionAlias, 0)
+	for rows.Next() {
+		var alias domain.AssertionAlias
+		if err := rows.Scan(&alias.Kind, &alias.Value); err != nil {
+			return nil, fmt.Errorf("read assertion alias: %w", err)
+		}
+		aliases = append(aliases, alias)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate assertion aliases: %w", err)
+	}
+
+	return aliases, nil
+}
+
+const assertionExistsSQL = `
+SELECT 1
+FROM assertions
+WHERE assertion_id = ?
+`
+
+const evidenceSQL = `
+SELECT evidence_id, kind, raw_text, observed_at
+FROM evidence
+WHERE assertion_id = ?
+ORDER BY observed_at ASC, evidence_id ASC
+`
+
+// GetEvidence はAssertionに紐付くEvidence履歴を取得する。
+func (s *Store) GetEvidence(ctx context.Context, assertionID string) (domain.EvidenceResult, error) {
+	var exists int
+	err := s.db.QueryRowContext(ctx, assertionExistsSQL, assertionID).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.EvidenceResult{}, domain.ErrAssertionNotFound
+	}
+	if err != nil {
+		return domain.EvidenceResult{}, fmt.Errorf("check assertion existence: %w", err)
+	}
+	rows, err := s.db.QueryContext(ctx, evidenceSQL, assertionID)
+	if err != nil {
+		return domain.EvidenceResult{}, fmt.Errorf("get evidence: %w", err)
+	}
+	defer rows.Close()
+	result := domain.EvidenceResult{
+		AssertionID: assertionID,
+		Evidence:    make([]domain.Evidence, 0),
+	}
+	for rows.Next() {
+		var evidence domain.Evidence
+		if err := rows.Scan(&evidence.ID, &evidence.Kind, &evidence.RawText, &evidence.ObservedAt); err != nil {
+			return domain.EvidenceResult{}, fmt.Errorf("read evidence: %w", err)
+		}
+		result.Evidence = append(result.Evidence, evidence)
+	}
+	if err := rows.Err(); err != nil {
+		return domain.EvidenceResult{}, fmt.Errorf("iterate evidence: %w", err)
+	}
+
+	return result, nil
 }

@@ -86,6 +86,7 @@ description: Knowledge CLIのGo実装におけるCLI境界、application/domain/
 - `gofmt` を変更したGoファイルに実行する。
 - `go test ./...`
 - `go vet ./...`
+- `task lint`
 - `.agents/skills/impl-knowledge-cli/scripts/check_test_coverage.sh`
 - 変更内容に応じて、対象のCLI process integration testとmigrationの初回・再実行・rollback検証を実行する。
 

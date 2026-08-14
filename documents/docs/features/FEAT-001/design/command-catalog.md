@@ -1,6 +1,6 @@
 # FEAT-001 Command Catalog（v1）
 
-全操作は [../design.md](../design.md) の名前付きoption入力、JSON出力、共通envelope／error／exit codeに従う。初期提供に `search-semantic` は含めない。
+全操作は [../design.md](../design.md) の名前付きoption入力、JSON出力、共通envelope／error／exit codeに従う。最初の`Ctrl-C`をresponse開始前に観測した場合は例外としてJSONを出力せず、stdout／stderrを空にして終了コード130で終える。response開始後は既出力を取り消さない。初期提供に `search-semantic` は含めない。
 
 | Operation | 分類 | 資料 | 状態 |
 | --- | --- | --- | --- |

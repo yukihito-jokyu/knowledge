@@ -1,18 +1,96 @@
 {
+  "seed": "seed.sql",
+  "empty_store_cases": [
+    {
+      "name": "初回既定Storeのsearch-text",
+      "arguments": ["search-text", "--query", "missing"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": []}},
+      "stderr": null
+    }
+  ],
+  "store_failure_cases": [
+    {
+      "name": "既定Store作成失敗",
+      "arguments": ["search-text", "--query", "channel"],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "storage_error", "message": "Knowledge Storeを開けません"}}
+    }
+  ],
+  "interrupted_cases": [
+    {
+      "name": "migration中の割込み",
+      "stage": "migration",
+      "arguments": ["search-text", "--query", "channel"],
+      "exit_code": 130,
+      "stdout": "",
+      "stderr": null
+    },
+    {
+      "name": "read中の割込み",
+      "stage": "read",
+      "arguments": ["get", "--assertion-id", "asrt_01"],
+      "exit_code": 130,
+      "stdout": "",
+      "stderr": null
+    }
+  ],
   "cases": [
     {
       "name": "search-text の最小入力",
       "arguments": ["search-text", "--query", "channel"],
-      "exit_code": 1,
-      "stdout": "",
-      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+      "exit_code": 0,
+      "stdout": {
+        "ok": true,
+        "data": {
+          "results": [
+            {
+              "assertion_id": "asrt_01",
+              "normalized_text": "channel send",
+              "revision": 1,
+              "concepts": [{"concept_id": "cpt_01", "name": "channel"}],
+              "scope": [{"key": "language", "value": "Go"}],
+              "matched_fields": ["assertion_text", "concept"]
+            }
+          ]
+        }
+      },
+      "stderr": null
     },
     {
       "name": "search-concept の最小入力",
       "arguments": ["search-concept", "--concept", "channel"],
-      "exit_code": 1,
-      "stdout": "",
-      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+      "exit_code": 0,
+      "stdout": {
+        "ok": true,
+        "data": {
+          "concept": {"concept_id": "cpt_01", "name": "channel"},
+          "results": [
+            {
+              "assertion_id": "asrt_01",
+              "normalized_text": "channel send",
+              "revision": 1,
+              "scope": [{"key": "language", "value": "Go"}]
+            }
+          ]
+        }
+      },
+      "stderr": null
+    },
+    {
+      "name": "search-text の0件",
+      "arguments": ["search-text", "--query", "missing"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": []}},
+      "stderr": null
+    },
+    {
+      "name": "search-concept の未登録Concept",
+      "arguments": ["search-concept", "--concept", "missing"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"concept": null, "results": []}},
+      "stderr": null
     },
     {
       "name": "search-related の最小入力",
@@ -24,16 +102,69 @@
     {
       "name": "get の最小入力",
       "arguments": ["get", "--assertion-id", "asrt_01"],
-      "exit_code": 1,
-      "stdout": "",
-      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+      "exit_code": 0,
+      "stdout": {
+        "ok": true,
+        "data": {
+          "assertion_id": "asrt_01",
+          "current_revision": 1,
+          "revisions": [
+            {
+              "revision": 1,
+              "normalized_text": "channel send",
+              "scope": [{"key": "language", "value": "Go"}],
+              "temporal": {
+                "valid_from": null,
+                "valid_until": null,
+                "version_scope": null,
+                "observed_at": null,
+                "last_verified": null
+              }
+            }
+          ],
+          "concepts": [
+            {"concept_id": "cpt_01", "name": "channel", "aliases": ["chan"]}
+          ],
+          "aliases": [{"kind": "identifier", "value": "ch"}]
+        }
+      },
+      "stderr": null
     },
     {
       "name": "get-evidence の最小入力",
       "arguments": ["get-evidence", "--assertion-id", "asrt_01"],
-      "exit_code": 1,
+      "exit_code": 0,
+      "stdout": {
+        "ok": true,
+        "data": {
+          "assertion_id": "asrt_01",
+          "evidence": [
+            {"evidence_id": "evd_01", "kind": "user_code", "raw_text": "first", "observed_at": "2026-08-14T00:00:00Z"}
+          ]
+        }
+      },
+      "stderr": null
+    },
+    {
+      "name": "get の未検出",
+      "arguments": ["get", "--assertion-id", "missing"],
+      "exit_code": 3,
       "stdout": "",
-      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+      "stderr": {"ok": false, "error": {"code": "not_found", "message": "Assertionが見つかりません"}}
+    },
+    {
+      "name": "get-evidence の未検出",
+      "arguments": ["get-evidence", "--assertion-id", "missing"],
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "not_found", "message": "Assertionが見つかりません"}}
+    },
+    {
+      "name": "get-evidence の0件",
+      "arguments": ["get-evidence", "--assertion-id", "asrt_02"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"assertion_id": "asrt_02", "evidence": []}},
+      "stderr": null
     },
     {
       "name": "search-contradictions の最小入力",

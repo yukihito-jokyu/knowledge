@@ -1,0 +1,13 @@
+id: impl-knowledge-cli-package-local-coverage
+target_skill: impl-knowledge-cli
+scenario: application、domain、SQLite adapterへ責務を分離したKnowledge CLI実装のカバレッジを検査する依頼。
+input_summary: 各production packageのstatement coverageを100%に保ち、型宣言だけのdomain packageも含めて検査したい。
+expected:
+  - カバレッジ検査は各テストを持つproduction packageを個別に実行する。
+  - あるpackageのテスト実行で、別packageの未実行行を未被覆として合算しない。
+  - 各対象packageのstatement coverageが100%でなければ検査を失敗させる。
+  - GoFilesまたはTestGoFilesを持たないpackageは対象外にする。
+forbidden:
+  - -coverpkg=./...で各テストバイナリの未実行packageを重複集計する。
+  - 未被覆のproduction packageを成功扱いにする。
+related_issue: '#179'

@@ -1,0 +1,13 @@
+INSERT INTO assertions (assertion_id, current_revision, created_at) VALUES ('asrt_01', 1, '2026-08-14T00:00:00Z');
+INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at) VALUES ('asrt_01', 1, 'channel send', '2026-08-14T00:00:00Z');
+INSERT INTO revision_scopes (assertion_id, revision, scope_key, scope_value) VALUES ('asrt_01', 1, 'language', 'Go');
+INSERT INTO temporal_metadata (assertion_id, revision) VALUES ('asrt_01', 1);
+INSERT INTO concepts (concept_id, name, created_at) VALUES ('cpt_01', 'channel', '2026-08-14T00:00:00Z');
+INSERT INTO concept_terms (term, concept_id, term_kind) VALUES ('channel', 'cpt_01', 'name');
+INSERT INTO concept_aliases (alias, concept_id) VALUES ('chan', 'cpt_01');
+INSERT INTO assertion_concepts (assertion_id, concept_id) VALUES ('asrt_01', 'cpt_01');
+INSERT INTO assertion_aliases (assertion_id, alias_kind, alias_value) VALUES ('asrt_01', 'identifier', 'ch');
+INSERT INTO evidence (evidence_id, assertion_id, kind, raw_text, observed_at, created_at) VALUES ('evd_01', 'asrt_01', 'user_code', 'first', '2026-08-14T00:00:00Z', '2026-08-14T00:00:00Z');
+INSERT INTO assertion_lexical_index (assertion_id, normalized_text, concept_name, concept_alias, scope_key, scope_value, assertion_alias) VALUES ('asrt_01', 'channel send', 'channel', 'chan', 'language', 'Go', 'ch');
+INSERT INTO assertions (assertion_id, current_revision, created_at) VALUES ('asrt_02', 1, '2026-08-14T00:00:00Z');
+INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at) VALUES ('asrt_02', 1, 'empty evidence', '2026-08-14T00:00:00Z');

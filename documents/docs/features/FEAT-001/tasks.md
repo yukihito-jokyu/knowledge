@@ -12,10 +12,12 @@
 | CLI option・JSON・error・exit契約 | pass | [design.md](design.md)「Interfaces / Data」、[CLI入力規約](design/cli-input-conventions.md)、全11操作資料 |
 | operation別I/O・validation・DB read/write・transaction・図 | pass | [command-catalog.md](design/command-catalog.md)、[database-access-map.md](design/database-access-map.md)、`design/commands/` の全11資料 |
 | 矛盾候補検索の公開契約 | pass | [DEC-FEAT-004](decisions/DEC-FEAT-004.md)、[search-contradictions.md](design/commands/search-contradictions.md) |
+| 既定Storeと初回初期化 | pass | [DEC-FEAT-005](decisions/DEC-FEAT-005.md)、[design.md](design.md)「Store の既定保存先と初期化」、[architecture.md](../../design/architecture.md) |
+| 要求キャンセルと割込み終了 | pass | [DEC-FEAT-006](decisions/DEC-FEAT-006.md)、[design.md](design.md)「共通結果 envelope」、[architecture.md](../../design/architecture.md) |
 | Fixture・受入観点 | pass | [design.md](design.md)「Acceptance / Test Design」、各操作資料 |
 | Go実装基盤・責務境界 | pass | [architecture.md](../../design/architecture.md)「Go module と配置規約」、[DEC-ARCH-002](../../design/decisions/DEC-ARCH-002.md) |
 
-**結論:** pass。実装者が振る舞い、データ、公開契約、または実装基盤を新たに決める未確定事項は検出しなかった。
+**結論:** pass。実装者が振る舞い、データ、公開契約、または実装基盤を新たに決める未確定事項は検出しなかった。通常ビルドの既定StoreはDEC-FEAT-005により利用者承認済みである。
 
 ## 固定済み実装基盤
 
@@ -23,8 +25,9 @@
 
 - Knowledge CLIはGo 1.26以上の単一Go moduleとする。SQLite driverはCGOを必要としない`modernc.org/sqlite`を用いる。
 - CLI process entry、application、domain、SQLite persistence、migration asset、fixture、integration testの責務と依存方向は[architecture.md](../../design/architecture.md)「Go module と配置規約」に従う。
-- migration assetはGo標準の`embed`で実行バイナリへ同梱し、実行時の外部migrationディレクトリ、保存先option、設定ファイルを追加しない。
+- migration assetはGo標準の`embed`で実行バイナリへ同梱する。通常ビルドのStoreはDEC-FEAT-005で固定したOS標準のユーザー設定ディレクトリ配下に初期化し、実行時の外部migrationディレクトリ、保存先option、設定ファイルを追加しない。
 - 共通チェックは`gofmt`、`go test ./...`、`go vet ./...`とする。依存管理では`go.mod`／`go.sum`と`go mod tidy`を用い、第三者lintは必須化しない。
+- 最初の`Ctrl-C`をresponse開始前に観測した場合は同一の要求Contextを全層へ伝播し、JSONなし・stdout／stderrなし・終了コード130で終える。Context非対応初期化APIの前後とresponse開始直前に確認し、中断されたmutation transactionはcommitしない。
 
 ## タスク一覧
 
@@ -55,7 +58,7 @@
   - Go 1.26以上の単一Go moduleで、CGOを必要としない`modernc.org/sqlite`を用いてmigrationを実行できる。
   - migration assetはGo標準の`embed`で同梱され、隔離したSQLite DBへ適用して初回適用・再実行・失敗時の原子性を確認できる。
 - **依存:** なし。
-- **対象外／注記:** 保存先、設定、バックアップ、同期、Semantic Indexの実装は対象外。DDLの正規根拠は [database-schema.md](design/database-schema.md)。SQLite adapter、連番migration asset、および実行バイナリへのasset同梱はInitial Designで固定済みの責務境界に従う。
+- **対象外／注記:** 保存先の選択、設定、バックアップ、同期、Semantic Indexの実装は対象外。通常ビルドの既定Storeは[DEC-FEAT-005](decisions/DEC-FEAT-005.md)に従う。DDLの正規根拠は [database-schema.md](design/database-schema.md)。SQLite adapter、連番migration asset、および実行バイナリへのasset同梱はInitial Designで固定済みの責務境界に従う。
 
 ## TASK-001-02: 共通 CLI 入出力・エラー境界を実現する
 
@@ -66,7 +69,7 @@
 - **受入条件:**
   - 全11操作が名前付きoption入力のみを受け、標準入力request JSONを公開契約として要求しない。
   - 成功時はstdoutに`ok: true`のJSON objectを1件だけ、失敗時はstdoutなし・stderrに`ok: false`のerror objectを1件だけ出力する。
-  - `validation_error`=2、`not_found`=3、`conflict`=4、`storage_error`／`internal_error`=1、成功=0の終了コードを守る。
+  - `validation_error`=2、`not_found`=3、`conflict`=4、`storage_error`／`internal_error`=1、成功=0の終了コードを守る。response開始前に観測した最初の`Ctrl-C`だけはJSONなし・stdout／stderrなし・終了コード130とする。
   - `null`、field省略、空配列、固定値の意味は各操作の項目定義と矛盾しない。
 - **依存:** TASK-001-01（migration失敗を共通のstorage errorとして扱うため）。
 - **対象外／注記:** 検索語生成、操作選択、知識状態判定はCodexの責務である。正規根拠は [CLI入力規約](design/cli-input-conventions.md) と [design.md](design.md)「Interfaces / Data」。
@@ -83,6 +86,7 @@
   - `get` は現行本文、Scope、Concept・Alias、Temporal Metadata、revisionを正しく返し、指定Assertionが不在なら`not_found`となる。
   - `get-evidence` は指定AssertionのEvidence履歴を返し、Evidenceが0件であることを未知・`known`等の意味判断に変換しない。
   - read操作はStoreを書き換えず、全field、固定値、`null`／省略／空配列の意味は各操作資料に一致する。
+  - 通常ビルドはDEC-FEAT-005の既定Storeを初期化して上記4操作を実行し、保存先の解決・初期化・migration失敗は`storage_error`となる。
 - **依存:** TASK-001-01、TASK-001-02。
 - **対象外／注記:** Semantic Search、検索継続の判断、Evidenceの強度・知識状態の評価は対象外。操作別の正規契約は [command-catalog.md](design/command-catalog.md) の各資料。
 
@@ -155,10 +159,10 @@
   - 隔離SQLite DBへ埋込みmigrationを適用し、適用済みDBへの再実行が成功することを共通手順で確認できる。
   - CLI processの入力option、stdout、stderr、終了コード、JSON response、Storeの事後状態を、各操作の契約へ対応付けて観測できる。
   - 空Storeと、Assertion、Evidence、Concept、Scope、Relation、Temporal Metadataを含む再利用可能な初期データを用意できる。
-  - success、`validation_error`、`not_found`、`conflict`、`storage_error`／`internal_error`の観測方法を提供し、stdout／stderrと終了コードの共通契約を確認できる。
+  - success、`validation_error`、`not_found`、`conflict`、`storage_error`／`internal_error`、`Ctrl-C`中断の観測方法を提供し、stdout／stderrと終了コードの共通契約を確認できる。`integrationtest` build tagにだけ含める非公開同期gateでmigration、read、mutationの開始を親testが確認してから割込みを送れる。このgateは通常composition、既定Store、公開CLI option、公開環境変数、設定を変更しない。
   - 共通基盤は承認済みの`gofmt`、`go test ./...`、`go vet ./...`で利用でき、公開CLI契約を追加しない。
 - **依存:** TASK-001-02（CLIの共通I/O・error境界を観測するため）。
-- **対象外／注記:** 個別操作の完全な正常系・失敗系、履歴保全、rollback、契約横断の判定はTASK-001-09で行う。Issue #175 の Scenario A〜Jを横断する統合・層別評価（NFR-006）はFEAT-005が担当する。
+- **対象外／注記:** 個別操作の完全な正常系・失敗系、履歴保全、rollback、契約横断の判定はTASK-001-09で行う。Issue #179 は取得操作だけを実装するため、この基盤を用いる割込みprocess試験は migration／read までを対象とする。mutation executor を実装する TASK-001-06／07 では、同じ gate の `mutation` 段階、終了コード130・無出力、および transaction が commit せず DB 事後状態が不変である process 試験を追加しなければならない。これは DEC-FEAT-006 の要件を緩和しない。Issue #175 の Scenario A〜Jを横断する統合・層別評価（NFR-006）はFEAT-005が担当する。
 
 ## TASK-001-09: 全操作の契約・履歴・失敗原子性を横断検証する
 
@@ -173,6 +177,7 @@
   - `search-contradictions` のincoming／outgoing、Concept selectorの両端一致、`target.id`の後続取得可能性、Assertion→Assertion制約を確認できる。
   - mutation失敗ではAssertion、Evidence、Relation、revision、字句派生Index、migration versionの部分更新が残らないことを確認できる。
   - migrationの初回適用・再実行、及びv1 catalogにSemantic Searchが現れず後続Indexを正規データから再構築できる前提を確認できる。
+  - migration、read、mutationの各処理開始を非公開同期gateで確認してから`Ctrl-C`を送り、response開始前の中断がJSONを出力せず終了コード130となることを確認できる。要求ContextがSQLiteまで伝播し、mutation transactionがcommitせずDB事後状態が不変であることを確認できる。
 - **依存:** TASK-001-03、TASK-001-04、TASK-001-05、TASK-001-06、TASK-001-07、TASK-001-08。
 - **対象外／注記:** Codexによる検索戦略、Search Trace、Knowledge Assessment、Article評価のfixtureは後続Featureの範囲。Issue #175 の Scenario A〜J を横断する統合・層別評価（NFR-006）はFEAT-005が担当し、本Taskはそれに利用可能なCLI／Storeの決定論的fixtureだけを担う。
 
@@ -180,4 +185,4 @@
 
 - `search-semantic`、Embedding、Vector Index（FEAT-006）。
 - Query生成、検索継続・停止、同一性・Evidence価値の意味判断、`known`等のKnowledge Assessment。
-- 保存先、設定、暗号化、バックアップ、同期、共有、リモート接続。
+- 保存先の選択、設定、暗号化、バックアップ、同期、共有、リモート接続。通常ビルドの既定保存先と初回初期化はDEC-FEAT-005の範囲である。

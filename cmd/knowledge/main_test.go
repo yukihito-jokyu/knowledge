@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"reflect"
 	"testing"
@@ -193,108 +194,178 @@ func invalidWithCode(name string, code errorCode, arguments ...string) validatio
 }
 
 func TestResponsesAndExitCodes(t *testing.T) {
-	if got := (cliError{
-		message: "失敗",
-	}).Error(); got != "失敗" {
-		t.Fatalf("Error() = %q", got)
-	}
-
-	var success bytes.Buffer
-	writeSuccess(&success, map[string]string{"result": "ok"})
-	assertJSON(t, success.Bytes(), map[string]any{
-		"ok": true,
-		"data": map[string]any{
-			"result": "ok",
-		},
-	})
-
-	var failure bytes.Buffer
-	writeError(&failure, cliError{
-		code:    notFoundError,
-		message: "not found",
-		field:   "assertion-id",
-	})
-	assertJSON(t, failure.Bytes(), map[string]any{
-		"ok": false,
-		"error": map[string]any{
-			"code":    "not_found",
-			"message": "not found",
-			"field":   "assertion-id",
-		},
-	})
-
 	tests := []struct {
-		code errorCode
-		want int
+		name string
+		test func(*testing.T)
 	}{
 		{
-			validationError,
-			2,
+			name: "cliErrorのmessage",
+			test: func(t *testing.T) {
+				if got := (cliError{message: "失敗"}).Error(); got != "失敗" {
+					t.Fatalf("Error() = %q", got)
+				}
+			},
 		},
 		{
-			notFoundError,
-			3,
+			name: "成功response",
+			test: func(t *testing.T) {
+				var output bytes.Buffer
+				writeSuccess(&output, map[string]string{"result": "ok"})
+				assertJSON(t, output.Bytes(), map[string]any{
+					"ok": true,
+					"data": map[string]any{
+						"result": "ok",
+					},
+				})
+			},
 		},
 		{
-			conflictError,
-			4,
+			name: "失敗response",
+			test: func(t *testing.T) {
+				var output bytes.Buffer
+				writeError(&output, cliError{
+					code:    notFoundError,
+					message: "not found",
+					field:   "assertion-id",
+				})
+				assertJSON(t, output.Bytes(), map[string]any{
+					"ok": false,
+					"error": map[string]any{
+						"code":    "not_found",
+						"message": "not found",
+						"field":   "assertion-id",
+					},
+				})
+			},
 		},
 		{
-			storageError,
-			1,
+			name: "終了コード",
+			test: func(t *testing.T) {
+				for _, tt := range []struct {
+					name string
+					code errorCode
+					want int
+				}{
+					{
+						name: "validation",
+						code: validationError,
+						want: 2,
+					},
+					{
+						name: "not_found",
+						code: notFoundError,
+						want: 3,
+					},
+					{
+						name: "conflict",
+						code: conflictError,
+						want: 4,
+					},
+					{
+						name: "storage",
+						code: storageError,
+						want: 1,
+					},
+					{
+						name: "internal",
+						code: internalError,
+						want: 1,
+					},
+					{
+						name: "unknown",
+						code: "unknown",
+						want: 1,
+					},
+				} {
+					t.Run(tt.name, func(t *testing.T) {
+						if got := exitCode(tt.code); got != tt.want {
+							t.Fatalf("exitCode(%q) = %d, want %d", tt.code, got, tt.want)
+						}
+					})
+				}
+			},
 		},
 		{
-			internalError,
-			1,
-		},
-		{
-			"unknown",
-			1,
+			name: "JSON encode失敗",
+			test: func(t *testing.T) {
+				var output bytes.Buffer
+				writeJSON(&output, make(chan int))
+				if output.Len() != 0 {
+					t.Fatalf("failed JSON output = %q, want empty", output.String())
+				}
+			},
 		},
 	}
 	for _, tt := range tests {
-		if got := exitCode(tt.code); got != tt.want {
-			t.Fatalf("exitCode(%q) = %d, want %d", tt.code, got, tt.want)
-		}
-	}
-
-	var failed bytes.Buffer
-	writeJSON(&failed, make(chan int))
-	if failed.Len() != 0 {
-		t.Fatalf("failed JSON output = %q, want empty", failed.String())
+		t.Run(tt.name, func(t *testing.T) {
+			tt.test(t)
+		})
 	}
 }
 
-func TestMainUsesProcessBoundary(t *testing.T) {
+func TestMain(t *testing.T) {
 	originalArguments := processArguments
 	originalStdout := processStdout
 	originalStderr := processStderr
 	originalExit := exitProcess
+	originalInterruptContext := newInterruptContext
 	t.Cleanup(func() {
 		processArguments = originalArguments
 		processStdout = originalStdout
 		processStderr = originalStderr
 		exitProcess = originalExit
+		newInterruptContext = originalInterruptContext
 	})
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	exitCode := -1
-	processArguments = []string{
-		"knowledge",
-		"get",
+	tests := []struct {
+		name         string
+		checkStopped bool
+	}{
+		{
+			name: "process境界の入出力",
+		},
+		{
+			name:         "終了前にsignal購読を解除する",
+			checkStopped: true,
+		},
 	}
-	processStdout = &stdout
-	processStderr = &stderr
-	exitProcess = func(code int) { exitCode = code }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			processArguments = []string{
+				"knowledge",
+				"get",
+			}
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			processStdout = &stdout
+			processStderr = &stderr
+			exitCode := -1
+			stopped := false
+			if tt.checkStopped {
+				newInterruptContext = func() (context.Context, context.CancelFunc) {
+					return context.Background(), func() { stopped = true }
+				}
+			} else {
+				newInterruptContext = originalInterruptContext
+			}
+			exitProcess = func(code int) {
+				exitCode = code
+				if tt.checkStopped && !stopped {
+					t.Fatal("signal購読を解除する前に終了しました")
+				}
+			}
 
-	main()
+			main()
 
-	if exitCode != 2 || stdout.Len() != 0 || stderr.Len() == 0 {
-		t.Fatalf("main() exit/stdout/stderr = %d/%q/%q", exitCode, stdout.String(), stderr.String())
+			if exitCode != 2 || stdout.Len() != 0 || stderr.Len() == 0 {
+				t.Fatalf("main() exit/stdout/stderr = %d/%q/%q", exitCode, stdout.String(), stderr.String())
+			}
+		})
 	}
 }
 
 func TestRunWritesOnlyOneStream(t *testing.T) {
+	originalStdout := processStdout
+	t.Cleanup(func() { processStdout = originalStdout })
 	tests := []struct {
 		name      string
 		arguments []string
@@ -324,7 +395,10 @@ func TestRunWritesOnlyOneStream(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var stdout bytes.Buffer
 			var stderr bytes.Buffer
-			if got := run(tt.arguments, &stderr); got != tt.wantCode {
+			processStdout = &stdout
+			if got := runWithExecutor(context.Background(), tt.arguments, &stderr, func(context.Context, command) (any, cliError, bool) {
+				return nil, cliError{}, false
+			}); got != tt.wantCode {
 				t.Fatalf("run() = %d, want %d", got, tt.wantCode)
 			}
 			if stdout.Len() != 0 {
@@ -336,6 +410,68 @@ func TestRunWritesOnlyOneStream(t *testing.T) {
 			}
 			if response.Error.Code != tt.wantError {
 				t.Fatalf("error code = %q, want %q", response.Error.Code, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestRunWithExecutorPrioritizesCancellation(t *testing.T) {
+	originalStdout := processStdout
+	originalParser := parseCLICommand
+	t.Cleanup(func() {
+		processStdout = originalStdout
+		parseCLICommand = originalParser
+	})
+	tests := []struct {
+		name  string
+		setup func(context.CancelFunc)
+	}{
+		{
+			name: "parse前",
+			setup: func(cancel context.CancelFunc) {
+				cancel()
+			},
+		},
+		{
+			name: "parse後",
+			setup: func(cancel context.CancelFunc) {
+				parseCLICommand = func([]string) (command, cliError) {
+					cancel()
+
+					return command{}, cliError{}
+				}
+			},
+		},
+		{
+			name:  "実行後",
+			setup: func(context.CancelFunc) {},
+		},
+		{
+			name:  "未処理実行後",
+			setup: func(context.CancelFunc) {},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parseCLICommand = originalParser
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			tt.setup(cancel)
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			processStdout = &stdout
+			code := runWithExecutor(ctx, []string{"get", "--assertion-id", "asrt_01"}, &stderr, func(_ context.Context, _ command) (any, cliError, bool) {
+				if tt.name == "実行後" || tt.name == "未処理実行後" {
+					cancel()
+				}
+
+				return nil, cliError{}, tt.name != "未処理実行後"
+			})
+			if code != interruptedExitCode {
+				t.Fatalf("runWithExecutor() = %d, want %d", code, interruptedExitCode)
+			}
+			if stdout.Len() != 0 || stderr.Len() != 0 {
+				t.Fatalf("stdout/stderr = %q/%q, want empty", stdout.String(), stderr.String())
 			}
 		})
 	}
