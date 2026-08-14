@@ -1,0 +1,15 @@
+id: impl-knowledge-cli-cli-user-verification-fixture
+target_skill: impl-knowledge-cli
+scenario: 利用者が確認すべきKnowledge CLIコマンドを洗い出し、自動検証できるようにする実装依頼。
+input_summary: 全操作の利用者確認コマンドを可視化し、Taskfileの扱いをユーザー指定に従いながら、実バイナリのstdout、stderr、exit codeを自動検証したい。
+expected:
+  - 各確認ケースの引数、期待stdout、期待stderr JSON、期待exit codeをtestdata/fixturesに置く。
+  - test/integrationから実バイナリを起動し、fixtureの各ケースをprocess境界で検証する。
+  - Taskfileをfixtureや期待結果の正本にせず、test taskの有無はユーザー指定に従う。
+  - 未実装操作は成功を装わず、現時点の期待結果と後続の成功契約検証を区別する。
+forbidden:
+  - 利用者向けの新しい公開実行ファイルやCLI optionを追加する。
+  - fixtureを読まずに、テストコードへコマンド一覧と期待結果を重複して埋め込む。
+  - unit testだけで公開CLIのstdout、stderr、exit codeを検証済みと結論づける。
+  - Taskfileの構成をユーザー指定なしに正本または固定方針として扱う。
+related_issue: '#178'
