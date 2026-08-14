@@ -1,0 +1,14 @@
+id: impl-knowledge-cli-public-contract-decision-record
+target_skill: impl-knowledge-cli
+scenario: 実装中に、Issueの受入条件が承認済みoperation契約にない公開CLIの時点検索を要求し、利用者がDecision記録の追加を明示する。
+input_summary: Issue #181のsearch-temporalで、Taskは指定時点・有効期間の照合を要求するが、operation契約はConceptとScopeの候補取得だけを定めている。利用者がdecisions配下への記録を指示した。
+expected:
+  - L3の未承認Decisionとして、論点・根拠・選択肢・推奨・承認が必要な未決定事項をdecision_requestへまとめる。
+  - planning-orchestratorからartifact ownerのfeature-designへDecision作成を依頼する。
+  - 人間承認まで、公開option、JSON、SQL照合、Task、handoffを確定済みの内容へ変更しない。
+  - Decision承認後に仕様照合を再実行し、READYになるまで実装を開始しない。
+forbidden:
+  - 実装系roleがdocuments/docs/features配下へDecisionを直接作成する。
+  - 利用者が選んでいない公開契約を承認済みとして扱う。
+  - 未承認の時点・期間optionを実装する。
+related_issue: '#181'

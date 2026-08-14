@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -29,7 +30,8 @@ var (
 	migrationFiles         embed.FS
 	migrationFileSystem    fs.FS = migrationFiles
 	openDatabase                 = sql.Open
-	loadEmbeddedMigrations       = embeddedMigrations
+	loadEmbeddedMigrations       = registeredMigrations
+	marshalScope                 = json.Marshal
 	inspectSchemaState           = func(store *Store, ctx context.Context) (schemaStatus, []int, error) { return store.schemaState(ctx) }
 	commitMigration              = func(tx *sql.Tx) error { return tx.Commit() }
 	waitForIntegrationGate       = waitIntegrationGate
@@ -251,7 +253,11 @@ func (s *Store) applyMigrationScripts(ctx context.Context, migrations []migratio
 		return err
 	}
 	for _, migration := range migrations {
-		if _, err := tx.ExecContext(ctx, migration.sql); err != nil {
+		if migration.apply != nil {
+			if err := migration.apply(ctx, tx); err != nil {
+				return fmt.Errorf("apply schema migration: %w", err)
+			}
+		} else if _, err := tx.ExecContext(ctx, migration.sql); err != nil {
 			return fmt.Errorf("apply schema migration: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, insertMigrationRecordSQL, migration.version, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
@@ -268,6 +274,7 @@ func (s *Store) applyMigrationScripts(ctx context.Context, migrations []migratio
 type migration struct {
 	version int
 	sql     string
+	apply   func(context.Context, *sql.Tx) error
 }
 
 func embeddedMigrations() ([]migration, error) {
@@ -308,6 +315,101 @@ func embeddedMigrations() ([]migration, error) {
 	}
 
 	return migrations, nil
+}
+
+func registeredMigrations() ([]migration, error) {
+	migrations, err := embeddedMigrations()
+	if err != nil {
+		return nil, err
+	}
+
+	return append(migrations, migration{
+		version: 2,
+		apply:   normalizeTemporalMetadata,
+	}), nil
+}
+
+const (
+	fixedTemporalTimestampLayout = "2006-01-02T15:04:05.000000000Z"
+	selectTemporalMetadataSQL    = `
+SELECT assertion_id, revision, valid_from, valid_until, observed_at, last_verified
+FROM temporal_metadata
+ORDER BY assertion_id ASC, revision ASC
+`
+	updateTemporalMetadataSQL = `
+UPDATE temporal_metadata
+SET valid_from = ?, valid_until = ?, observed_at = ?, last_verified = ?
+WHERE assertion_id = ? AND revision = ?
+`
+)
+
+type temporalMetadataRow struct {
+	assertionID  string
+	revision     int
+	validFrom    sql.NullString
+	validUntil   sql.NullString
+	observedAt   sql.NullString
+	lastVerified sql.NullString
+}
+
+// normalizeTemporalMetadata は時間比較可能な固定幅UTC表現へ既存値を正規化する。
+func normalizeTemporalMetadata(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, selectTemporalMetadataSQL)
+	if err != nil {
+		return fmt.Errorf("read temporal metadata: %w", err)
+	}
+	defer rows.Close()
+	var metadata []temporalMetadataRow
+	for rows.Next() {
+		var row temporalMetadataRow
+		if err := rows.Scan(&row.assertionID, &row.revision, &row.validFrom, &row.validUntil, &row.observedAt, &row.lastVerified); err != nil {
+			return fmt.Errorf("read temporal metadata row: %w", err)
+		}
+		metadata = append(metadata, row)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate temporal metadata: %w", err)
+	}
+	for _, row := range metadata {
+		validFrom, err := normalizedTemporalValue(row.validFrom)
+		if err != nil {
+			return fmt.Errorf("normalize valid_from for %s revision %d: %w", row.assertionID, row.revision, err)
+		}
+		validUntil, err := normalizedTemporalValue(row.validUntil)
+		if err != nil {
+			return fmt.Errorf("normalize valid_until for %s revision %d: %w", row.assertionID, row.revision, err)
+		}
+		if validFrom != nil && validUntil != nil && *validFrom > *validUntil {
+			return fmt.Errorf("valid_from is after valid_until for %s revision %d", row.assertionID, row.revision)
+		}
+		observedAt, err := normalizedTemporalValue(row.observedAt)
+		if err != nil {
+			return fmt.Errorf("normalize observed_at for %s revision %d: %w", row.assertionID, row.revision, err)
+		}
+		lastVerified, err := normalizedTemporalValue(row.lastVerified)
+		if err != nil {
+			return fmt.Errorf("normalize last_verified for %s revision %d: %w", row.assertionID, row.revision, err)
+		}
+		if _, err := tx.ExecContext(ctx, updateTemporalMetadataSQL, validFrom, validUntil, observedAt, lastVerified, row.assertionID, row.revision); err != nil {
+			return fmt.Errorf("update temporal metadata: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func normalizedTemporalValue(value sql.NullString) (*string, error) {
+	if !value.Valid {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value.String)
+	if err != nil {
+		return nil, err
+	}
+
+	normalized := parsed.UTC().Format(fixedTemporalTimestampLayout)
+
+	return &normalized, nil
 }
 
 func pendingMigrations(migrations []migration, applied []int) ([]migration, error) {
@@ -891,6 +993,127 @@ func (s *Store) SearchContradictions(ctx context.Context, assertionID *string, c
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate contradiction result: %w", err)
+	}
+
+	return results, nil
+}
+
+const searchTemporalSQL = `
+SELECT DISTINCT a.assertion_id,
+       r.normalized_text,
+       t.valid_from,
+       t.valid_until,
+       t.version_scope,
+       t.observed_at,
+       t.last_verified
+FROM assertions AS a
+JOIN assertion_revisions AS r
+  ON r.assertion_id = a.assertion_id AND r.revision = a.current_revision
+JOIN temporal_metadata AS t
+  ON t.assertion_id = r.assertion_id AND t.revision = r.revision
+LEFT JOIN assertion_concepts AS ac ON ac.assertion_id = a.assertion_id
+LEFT JOIN concepts AS c ON c.concept_id = ac.concept_id
+LEFT JOIN concept_aliases AS ca ON ca.concept_id = c.concept_id
+WHERE (? IS NULL OR c.name = ? OR ca.alias = ?)
+  AND (
+    (? IS NULL AND ? IS NULL AND ? IS NULL)
+    OR (
+      ? IS NOT NULL
+      AND (t.valid_from IS NOT NULL OR t.valid_until IS NOT NULL)
+      AND (t.valid_from IS NULL OR t.valid_from <= ?)
+      AND (t.valid_until IS NULL OR t.valid_until >= ?)
+    )
+    OR (
+      ? IS NOT NULL
+      AND ? IS NOT NULL
+      AND (t.valid_from IS NOT NULL OR t.valid_until IS NOT NULL)
+      AND (t.valid_until IS NULL OR t.valid_until >= ?)
+      AND (t.valid_from IS NULL OR t.valid_from <= ?)
+    )
+  )
+  AND (
+    json_array_length(?) = 0
+    OR NOT EXISTS (
+      SELECT 1
+      FROM json_each(?) AS requested
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM revision_scopes AS s
+        WHERE s.assertion_id = a.assertion_id
+          AND s.revision = a.current_revision
+          AND s.scope_key = json_extract(requested.value, '$.key')
+          AND s.scope_value = json_extract(requested.value, '$.value')
+      )
+    )
+  )
+ORDER BY a.assertion_id ASC
+`
+
+// SearchTemporal は条件に一致する時点情報を持つ現行Assertionを取得する。
+func (s *Store) SearchTemporal(ctx context.Context, concept *string, scope []domain.Scope, filter domain.TemporalSearchFilter) ([]domain.TemporalSearchResult, error) {
+	if err := waitForIntegrationGate(ctx, "read"); err != nil {
+		return nil, err
+	}
+	scopeJSON, err := marshalScope(scope)
+	if err != nil {
+		return nil, fmt.Errorf("encode temporal search scope: %w", err)
+	}
+	var conceptValue any
+	if concept != nil {
+		conceptValue = *concept
+	}
+	var atValue, validFromValue, validUntilValue any
+	if filter.At != nil {
+		atValue = *filter.At
+	}
+	if filter.ValidFrom != nil {
+		validFromValue = *filter.ValidFrom
+	}
+	if filter.ValidUntil != nil {
+		validUntilValue = *filter.ValidUntil
+	}
+	rows, err := s.db.QueryContext(
+		ctx,
+		searchTemporalSQL,
+		conceptValue,
+		conceptValue,
+		conceptValue,
+		atValue,
+		validFromValue,
+		validUntilValue,
+		atValue,
+		atValue,
+		atValue,
+		validFromValue,
+		validUntilValue,
+		validFromValue,
+		validUntilValue,
+		string(scopeJSON),
+		string(scopeJSON),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("search temporal: %w", err)
+	}
+	defer rows.Close()
+
+	results := make([]domain.TemporalSearchResult, 0)
+	for rows.Next() {
+		var result domain.TemporalSearchResult
+		var validFrom, validUntil, versionScope, observedAt, lastVerified sql.NullString
+		if err := rows.Scan(&result.AssertionID, &result.NormalizedText, &validFrom, &validUntil, &versionScope, &observedAt, &lastVerified); err != nil {
+			return nil, fmt.Errorf("read temporal search result: %w", err)
+		}
+		result.Temporal = domain.Temporal{
+			ValidFrom:    nullableString(validFrom),
+			ValidUntil:   nullableString(validUntil),
+			VersionScope: nullableString(versionScope),
+			ObservedAt:   nullableString(observedAt),
+			LastVerified: nullableString(lastVerified),
+		}
+		results = append(results, result)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate temporal search result: %w", err)
 	}
 
 	return results, nil

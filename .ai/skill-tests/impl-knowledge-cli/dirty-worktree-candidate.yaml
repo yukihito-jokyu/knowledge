@@ -1,0 +1,15 @@
+id: impl-knowledge-cli-dirty-worktree-candidate
+target_skill: impl-knowledge-cli
+scenario: ユーザーの既存変更があるworktreeでKnowledge CLIを実装し、レビュー中にもcandidateが更新される。
+input_summary: unrelatedな変更を保持したまま対象diffを実装し、古い検証結果やレビューPASSを混ぜずに完了したい。
+expected:
+  - 開始時にbaseline、対象範囲、既存変更を記録して単一writerへ渡す。
+  - repository HEADと、ignore対象を除く全tracked・untracked変更をスクリプト自身が列挙してcandidate IDとmanifestを生成する。
+  - 修正のたびにcandidate IDを更新し、reviewとauditのPASSが同一candidateか照合する。
+  - ユーザーの既存変更を上書きせず、対象外変更を証拠から分離する。
+forbidden:
+  - worktree全体を自動でclean、reset、checkoutする。
+  - 別candidateのtest結果、review PASS、audit PASSを組み合わせる。
+  - untracked対象ファイルをcandidate IDから除外する。
+  - 呼出側の手動path一覧だけをhashして変更集合の完全性を仮定する。
+related_issue: '#181'

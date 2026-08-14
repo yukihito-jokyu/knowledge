@@ -76,6 +76,9 @@ var operationSpecs = map[string]operationSpec{
 			"concept":     singleOption,
 			"scope-key":   repeatableOption,
 			"scope-value": repeatableOption,
+			"at":          singleOption,
+			"valid-from":  singleOption,
+			"valid-until": singleOption,
 		},
 	},
 	"create": {
@@ -321,6 +324,7 @@ func validateScopeGroups(values map[string][]string) cliError {
 
 func validateTemporalOptions(values map[string][]string) cliError {
 	for _, name := range []string{
+		"at",
 		"valid-from",
 		"valid-until",
 		"observed-at",
@@ -375,6 +379,12 @@ func validateOneSelector(values map[string][]string) cliError {
 func validateTemporalSelector(values map[string][]string) cliError {
 	if len(values["concept"]) == 0 && len(values["scope-key"]) == 0 {
 		return validationFailure("selector", "ConceptまたはScopeを指定してください")
+	}
+	if len(values["at"]) > 0 && (len(values["valid-from"]) > 0 || len(values["valid-until"]) > 0) {
+		return validationFailure("at", "atとvalid-from、valid-untilは同時に指定できません")
+	}
+	if len(values["at"]) == 0 && len(values["valid-from"]) != len(values["valid-until"]) {
+		return validationFailure("valid-from", "valid-fromとvalid-untilは組で指定してください")
 	}
 
 	return cliError{}

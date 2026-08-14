@@ -1,5 +1,5 @@
-id: impl-knowledge-cli-japanese-comments
-target_skill: impl-knowledge-cli
+id: impl-knowledge-cli-implementation-japanese-comments
+target_skill: impl-knowledge-cli-implementation
 scenario: 日本語を主言語とするリポジトリで、SQLite persistenceへ説明コメントを追加する。
 input_summary: migration SQLとGoファイルにテーブル・接続管理のコメントを追加する実装依頼。
 expected:

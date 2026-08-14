@@ -69,10 +69,10 @@ func TestParseCommandAcceptsAllOperations(t *testing.T) {
 			name: "search-temporal",
 			arguments: []string{
 				"search-temporal",
-				"--scope-key",
-				"language",
-				"--scope-value",
-				"Go",
+				"--concept",
+				"channel",
+				"--at",
+				"2026-08-14T00:00:00Z",
 			},
 		},
 		{
@@ -172,6 +172,18 @@ func TestParseCommandRejectsInvalidInput(t *testing.T) {
 				t.Fatalf("parseCommand() code = %q, want %q", err.code, want)
 			}
 		})
+	}
+}
+
+func TestParseCommandRejectsInvalidTemporalSearchFilter(t *testing.T) {
+	tests := [][]string{
+		{"search-temporal", "--concept", "channel", "--valid-from", "2026-08-14T00:00:00Z"},
+		{"search-temporal", "--concept", "channel", "--at", "2026-08-14T00:00:00Z", "--valid-from", "2026-08-14T00:00:00Z", "--valid-until", "2026-08-15T00:00:00Z"},
+	}
+	for _, arguments := range tests {
+		if _, err := parseCommand(arguments); err.code != validationError {
+			t.Fatalf("parseCommand(%v) error = %q, want validation", arguments, err.code)
+		}
 	}
 }
 

@@ -20,8 +20,8 @@ type Concept struct {
 
 // Scope はAssertion revisionの適用条件を表す。
 type Scope struct {
-	Key   string
-	Value string
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 // AssertionSummary は現行Assertionの検索結果を表す。
@@ -47,6 +47,20 @@ type Temporal struct {
 	VersionScope *string
 	ObservedAt   *string
 	LastVerified *string
+}
+
+// TemporalSearchResult は時点情報を持つ現行Assertionの検索結果を表す。
+type TemporalSearchResult struct {
+	AssertionID    string
+	NormalizedText string
+	Temporal       Temporal
+}
+
+// TemporalSearchFilter は時点または有効期間による検索条件を表す。
+type TemporalSearchFilter struct {
+	At         *string
+	ValidFrom  *string
+	ValidUntil *string
 }
 
 // Revision はAssertionの不変なrevisionを表す。
@@ -124,4 +138,5 @@ type RetrievalStore interface {
 	GetEvidence(context.Context, string) (EvidenceResult, error)
 	SearchRelated(context.Context, string, string, []string) ([]RelatedResult, error)
 	SearchContradictions(context.Context, *string, *string) ([]ContradictionResult, error)
+	SearchTemporal(context.Context, *string, []Scope, TemporalSearchFilter) ([]TemporalSearchResult, error)
 }

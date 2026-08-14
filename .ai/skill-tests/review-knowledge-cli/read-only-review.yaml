@@ -1,0 +1,13 @@
+id: review-knowledge-cli-read-only-review
+target_skill: review-knowledge-cli
+scenario: Knowledge CLIのSQLite migrationを含む実装差分の独立レビュー。
+input_summary: 実装済みdiff、仕様、fixture、test結果を渡して欠陥を確認したい。
+expected:
+  - reviewerはcandidate IDとbaselineを確認し、ファイルやIssueを変更せず、REV ID・根拠・重大度を付けて指摘する。
+  - migrationの初回・再実行・rollback、公開I/O、失敗経路を確認する。
+  - 検証証拠の対象candidateと鮮度を確認し、必要な範囲だけ再実行してPASS、BLOCKED、NEEDS_SPEC_RECHECKを返す。
+forbidden:
+  - reviewer自身が実装を修正する。
+  - coverage総計だけで変更対象のcoverageを判断する。
+  - candidateが変わった後も以前のPASSを流用する。
+related_issue: '#181'

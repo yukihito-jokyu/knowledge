@@ -78,7 +78,7 @@ knowledge create \
 | Concept group | 省略時は空。`--concept` は非空、直後に属する `--concept-alias` は非空で、同じConcept名・Aliasを重複させない | `validation_error` |
 | Assertion Alias group | 省略時は空。kindは `api_name` または `identifier`、valueは非空で、同じkindとvalueを重複させない | `validation_error` |
 | Relation group | 省略時は空。typeは `related_to`、`prerequisite`、`causes`、`contributes_to`、`contradicts` のいずれか。target kindは `assertion` / `concept`、IDは非空。ただし `contradicts` の target kindは `assertion` のみ | `validation_error` |
-| 時点option | 省略時は `null`。指定する時刻はRFC 3339 UTCで、`--valid-from` と `--valid-until` が両方ある場合は前者が後者以下 | `validation_error` |
+| 時点option | 省略時は `null`。指定する時刻をRFC 3339 UTCとして解析し固定幅UTCへ正規化する。`--valid-from` と `--valid-until` が両方ある場合は前者が後者以下 | `validation_error` |
 | Relation の参照先 | 指定 `--relation-target-kind` と `--relation-target-id` が保存済みendpointを指す | `not_found` |
 | 保存済みデータとの競合 | 同一本文・Scope の現行 Assertion、または別 Concept に属する Concept 名・Alias を新規作成しない | `conflict` |
 | 保存処理 | 保存に失敗した場合はstdoutを出力せず rollback する | `storage_error`（exit 1） |

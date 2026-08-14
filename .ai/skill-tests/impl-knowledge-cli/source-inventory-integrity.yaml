@@ -1,0 +1,13 @@
+id: impl-knowledge-cli-source-inventory-integrity
+target_skill: impl-knowledge-cli
+scenario: Verification PacketがFeature directory全体を正規source inventoryとして固定し、後続roleの前に仕様追加が発生する。
+input_summary: 現在存在するfileだけへinventoryを狭めて新しいDecisionを監視対象外にすることなく、同一仕様snapshotを保証したい。
+expected:
+  - source IDはinventoryのROOTまたはFILEという種別とrepository相対pathを含める。
+  - directory指定と、その時点で同じ内容を持つ個別file指定は異なるsource IDになる。
+  - directory配下へのDecision追加、削除、rename、内容変更でsource IDが変わる。
+  - implementer、reviewer、auditorがgate直前に同じinventoryからsource IDを再計算し、不一致時はNEEDS_SPEC_RECHECKでverifierへ戻す。
+forbidden:
+  - 展開後のfile集合と内容だけをhashし、inventory rootの縮小を同一sourceとして扱う。
+  - source ID不一致のまま実装、review、audit、Issue finalizationを続行する。
+related_issue: '#181'

@@ -25,6 +25,10 @@ func TestKnowledgeCLIAtProcessBoundary(t *testing.T) {
 	fixture := readFixture(t)
 	store := defaultStoreConfiguration(t, t.TempDir())
 	prepareRetrievalDatabase(t, store.Path, fixture.Seed)
+	before, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatalf("検索前のStoreを読む: %v", err)
+	}
 	binary := buildCLI(t, false)
 	for _, testCase := range fixture.Cases {
 		t.Run(testCase.Name, func(t *testing.T) {
@@ -35,6 +39,13 @@ func TestKnowledgeCLIAtProcessBoundary(t *testing.T) {
 			assertStdout(t, stdout, testCase.Stdout)
 			assertStderr(t, stderr, testCase.Stderr)
 		})
+	}
+	after, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatalf("検索後のStoreを読む: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("検索でStoreが更新されました")
 	}
 }
 

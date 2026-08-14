@@ -1,0 +1,16 @@
+id: impl-knowledge-cli-implementation-lint-validation
+target_skill: impl-knowledge-cli-implementation
+scenario: Knowledge CLIの実装とテストを追加した後、完了条件を検証する依頼。
+input_summary: Goのunit test、CLI process境界integration test、SQLite adapterを変更したため、実装候補をレビューへ渡したい。
+expected:
+  - 編集中は変更近傍のtestを優先し、candidate完成時にgofmt、go test ./...、go vet ./...を実行する。
+  - Taskfileで定義されたgolangci-lintをtask lintで実行する。
+  - Skillのpackage別100%カバレッジ検査と該当するprocess境界integration testを実行する。
+  - 検証command、結果、対象candidateをImplementation Reportへ記録し、全gate成功時だけREADY_FOR_REVIEWとする。
+forbidden:
+  - go testやgo vetの成功だけでlintを未実行のまま完了とする。
+  - lintを理由に承認済みの公開CLI契約を変更する。
+  - lintだけを実行してprocess境界integration testを省略する。
+  - reviewとauditのPASS前にIssueを更新する。
+  - 必須gateが失敗または未実行のImplementation ReportをREADY_FOR_REVIEWにする。
+related_issue: '#179'

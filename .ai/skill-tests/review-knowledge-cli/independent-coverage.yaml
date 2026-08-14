@@ -1,0 +1,16 @@
+id: review-knowledge-cli-independent-coverage
+target_skill: review-knowledge-cli
+scenario: Implementation Reportが変更packageのcoverage 100%を主張している候補を独立レビューする。
+input_summary: 実装者のcoverage報告を信用するだけでなく、candidate diffから変更production packageを再抽出してcoverage欠落や低下を検出したい。
+expected:
+  - Baseline SnapshotのHEADをreview用coverage scriptへ渡す。
+  - tracked変更と未追跡fileから変更production packageを独立抽出する。
+  - repositoryへcoverage artifactを残さず、packageごとのtestとstatement coverageを再測定する。
+  - 実装報告の対象package一覧と再測定結果を照合し、欠落、test失敗、100%未満をfindingにする。
+  - 100%でもassertion品質とprocess経路は別にレビューする。
+forbidden:
+  - Implementation Reportのcoverage値だけを根拠にPASSする。
+  - 変更packageを手作業で選び、未追跡production fileを見落とす。
+  - coverage profileをrepositoryへ残して読み取り専用境界を破る。
+  - coverage 100%だけでtest oracleの妥当性を保証する。
+related_issue: '#181'

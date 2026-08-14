@@ -123,8 +123,8 @@
               "normalized_text": "channel send",
               "scope": [{"key": "language", "value": "Go"}],
               "temporal": {
-                "valid_from": null,
-                "valid_until": null,
+                "valid_from": "2026-08-14T00:00:00.000000000Z",
+                "valid_until": "2026-12-31T23:59:59.000000000Z",
                 "version_scope": null,
                 "observed_at": null,
                 "last_verified": null
@@ -187,9 +187,75 @@
     {
       "name": "search-temporal の最小入力",
       "arguments": ["search-temporal", "--concept", "channel"],
-      "exit_code": 1,
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": [
+        {"assertion_id": "asrt_01", "normalized_text": "channel send", "temporal": {"valid_from": "2026-08-14T00:00:00.000000000Z", "valid_until": "2026-12-31T23:59:59.000000000Z", "version_scope": null, "observed_at": null, "last_verified": null}}
+      ]}},
+      "stderr": null
+    },
+    {
+      "name": "search-temporal の時点指定とAlias",
+      "arguments": ["search-temporal", "--concept", "chan", "--at", "2026-08-14T00:00:00Z"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": [
+        {"assertion_id": "asrt_01", "normalized_text": "channel send", "temporal": {"valid_from": "2026-08-14T00:00:00.000000000Z", "valid_until": "2026-12-31T23:59:59.000000000Z", "version_scope": null, "observed_at": null, "last_verified": null}}
+      ]}},
+      "stderr": null
+    },
+    {
+      "name": "search-temporal の期間境界",
+      "arguments": ["search-temporal", "--concept", "channel", "--valid-from", "2026-12-31T23:59:59Z", "--valid-until", "2027-01-01T00:00:00Z"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": [
+        {"assertion_id": "asrt_01", "normalized_text": "channel send", "temporal": {"valid_from": "2026-08-14T00:00:00.000000000Z", "valid_until": "2026-12-31T23:59:59.000000000Z", "version_scope": null, "observed_at": null, "last_verified": null}}
+      ]}},
+      "stderr": null
+    },
+    {
+      "name": "search-temporal の小数秒境界",
+      "arguments": ["search-temporal", "--scope-key", "precision", "--scope-value", "fraction", "--at", "2026-08-14T00:00:00.1Z"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": [
+        {"assertion_id": "asrt_05", "normalized_text": "fractional boundary", "temporal": {"valid_from": "2026-08-14T00:00:00.100000000Z", "valid_until": "2026-08-14T00:00:00.100000000Z", "version_scope": null, "observed_at": null, "last_verified": null}}
+      ]}},
+      "stderr": null
+    },
+    {
+      "name": "search-temporal のScope ANDと開放終端",
+      "arguments": ["search-temporal", "--scope-key", "language", "--scope-value", "Go", "--scope-key", "os", "--scope-value", "macOS", "--at", "2027-01-01T00:00:00Z"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": [
+        {"assertion_id": "asrt_04", "normalized_text": "open period", "temporal": {"valid_from": "2025-01-01T00:00:00.000000000Z", "valid_until": null, "version_scope": null, "observed_at": null, "last_verified": null}}
+      ]}},
+      "stderr": null
+    },
+    {
+      "name": "search-temporal の両端nullは時点検索で不一致",
+      "arguments": ["search-temporal", "--scope-key", "category", "--scope-value", "unknown", "--at", "2026-08-14T00:00:00Z"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": []}},
+      "stderr": null
+    },
+    {
+      "name": "search-temporal の不正時刻",
+      "arguments": ["search-temporal", "--concept", "channel", "--at", "today"],
+      "exit_code": 2,
       "stdout": "",
-      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+      "stderr": {"ok": false, "error": {"code": "validation_error", "message": "at: RFC 3339 UTC時刻を指定してください", "field": "at"}}
+    },
+    {
+      "name": "search-temporal の時点と期間の併用",
+      "arguments": ["search-temporal", "--concept", "channel", "--at", "2026-08-14T00:00:00Z", "--valid-from", "2026-08-14T00:00:00Z", "--valid-until", "2026-08-15T00:00:00Z"],
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "validation_error", "message": "at: atとvalid-from、valid-untilは同時に指定できません", "field": "at"}}
+    },
+    {
+      "name": "search-temporal の逆順期間",
+      "arguments": ["search-temporal", "--concept", "channel", "--valid-from", "2026-08-15T00:00:00Z", "--valid-until", "2026-08-14T00:00:00Z"],
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "validation_error", "message": "valid-until: valid-from以前の時刻を指定してください", "field": "valid-until"}}
     },
     {
       "name": "create の最小入力",

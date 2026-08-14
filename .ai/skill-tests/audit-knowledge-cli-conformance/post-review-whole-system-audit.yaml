@@ -1,0 +1,17 @@
+id: audit-knowledge-cli-conformance-post-review-whole-system-audit
+target_skill: audit-knowledge-cli-conformance
+scenario: SQLite migrationと公開時点検索を実装し、コードレビューが完了した後の最終監査。
+input_summary: 要件定義、詳細仕様、Decision、handoff、Issue、現行コード、既存CLI利用経路、fixture、integration testを照合する。
+expected:
+  - コードレビューがPASSした同一candidateだけを監査対象にする。
+  - 正規source inventoryからsource IDを再計算し、変更があればNEEDS_SPEC_RECHECKとする。
+  - 影響mapを作り、実装差分だけでなく、変更されていない隣接操作と旧versionからmigrationしたDBを含む全体利用経路を確認する。
+  - 要件・仕様・実装・実プロセス検証の対応をAUD ID付きで報告する。
+  - 既存利用の破壊や複数操作間の矛盾を、コードレビューとは別に検出する。
+  - PASS、BLOCKED、NEEDS_SPEC_RECHECKのverdictを返し、契約問題はオーケストレーターが仕様照合へ戻せる形にする。
+  - 再監査では以前のAUD finding IDを維持し、resolved、rejected_with_evidence、accepted_nonblocking_riskを追跡する。
+forbidden:
+  - コードレビューPASS前または異なるcandidateを監査する。
+  - 実装前の調査だけで最終監査を代用する。
+  - ファイル、Issue、外部状態を変更する。
+related_issue: '#181'

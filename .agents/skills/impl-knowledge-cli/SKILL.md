@@ -1,13 +1,38 @@
 ---
 name: impl-knowledge-cli
-description: Knowledge CLIのGo実装におけるCLI境界、application/domain/persistenceの責務分離、SQLite migration・transaction、process境界の統合検証を実装する際に使う。Semantic Searchや、承認済み公開契約の変更には使わない。
+description: Knowledge CLIのGo実装を、実装前仕様照合・単一writerによる実装・独立コードレビュー・実装後の全体整合性監査へ分担し、証拠付きで完了させるオーケストレーター。FEAT-001または後続FeatureのCLI、SQLite migration、公開I/O、fixture、プロセス結合テストを変更する依頼で使う。
 ---
 
-# Knowledge CLI Go Implementation
+# Knowledge CLI Implementation Orchestrator
 
 ## Goal
 
-承認済みのKnowledge CLI設計を、Go 1.26以上、`modernc.org/sqlite`、埋込みmigration、隔離SQLite DBを使うCLI process検証で、一貫して実装・検証する。
+承認済みのKnowledge CLI設計だけを、短い実装フィードバックと独立した品質ゲートで安全に完了する。オーケストレーター自身は製品コード・Planning成果物・Issueを変更しない。
+
+## Required Roles and Contract
+
+- `verify-knowledge-cli-spec`: 実装前の仕様照合
+- `impl-knowledge-cli-implementation`: 唯一のwriter
+- `review-knowledge-cli`: 実装diffの独立コードレビュー
+- `audit-knowledge-cli-conformance`: コードレビュー合格後の全体整合性監査
+- 全roleは[orchestration-contract.md](references/orchestration-contract.md)のauthority、baseline、candidate ID、入出力packet、verdictを使用する。
+
+## Orchestration Procedure
+
+0. `git status`と対象diffからbaselineと既存変更を記録し、製品コードのwriterを実装role一つに限定する。
+1. verifierへIssue、Feature、baselineを渡す。`READY`だけを実装へ進め、`BLOCKED`は根拠を解消し、`NEEDS_HUMAN_DECISION`は人間へ返す。Decision変更が必要なら実装roleに書かせず、`planning-orchestrator`からartifact ownerの`feature-design`へ依頼し、承認後に再照合する。
+2. implementerへVerification Packetを渡す。実装中は変更近傍のtestを優先し、candidate完成時に必須full gateを一度実行する。この段階ではIssueを更新しない。Implementation Reportが`READY_FOR_REVIEW`でなければreviewを開始しない。
+3. 実装diff、candidate ID、source ID、Implementation Reportをreviewerへ渡す。`PASS`なら次へ進み、`BLOCKED`はfinding ID単位で同じimplementerへ戻す。修正後はcandidate IDと証拠を更新し、同じreviewerが再確認する。`NEEDS_SPEC_RECHECK`はverifierへ戻す。
+4. **コードレビューが同一candidateへ`PASS`した後だけ**、新しい読み取り専用subagentでauditorを起動する。先入観を抑えるため、reviewの詳細findingではなくPASS事実と非blocking riskだけを渡す。`BLOCKED`は実装修正後にreviewから再開し、`NEEDS_SPEC_RECHECK`はverifierから再開する。
+5. 同じ原因のfindingが2回続いた場合、局所修正を繰り返さず、前提・責務境界・test oracleを再評価する。未承認の公開契約で実装を修正しない。
+6. 同一candidateへreviewとauditがともに`PASS`した後だけ、implementerへIssue Finalizationを依頼する。更新後にIssueを再読し、受入条件・検証結果・未完了項目が証拠と一致することを確認する。Issue更新失敗は実装成功と分けて報告する。
+
+## Role Boundaries
+
+- オーケストレーターだけがsubagentを起動し、packetとverdictを統合する。
+- 事前調査・コードレビュー・最終整合性監査subagentはファイル、Issue、外部状態を変更しない。
+- 製品コード、test、fixtureと最終Issue更新は実装subagentだけが行う。
+- Planning成果物はPlanning workflowのartifact ownerだけが変更する。実装系roleはDecision案を含めて直接書かない。
 
 ## Use When
 
@@ -31,71 +56,18 @@ description: Knowledge CLIのGo実装におけるCLI境界、application/domain/
 - `documents/docs/design/decisions/DEC-ARCH-002.md`
 - 実装対象に近い既存コードとtest
 
-## Project Conventions
+## Safety and Speed
 
-- Knowledge CLIはGo 1.26以上の単一moduleであり、SQLite driverはCGOを必要としない`modernc.org/sqlite`である。
-- `cmd/knowledge`は公開CLI境界と依存の組立てだけを担い、SQL・migration・ドメイン規則を持たない。
-- `internal/application`はtransport・SQLite driverから独立し、`internal/domain`は外部I/Oに依存しない。
-- `internal/persistence/sqlite`がSQLite接続、SQL、migration、派生字句Indexを所有し、applicationまたはCLI entryをimportしない。
-- migration SQL assetはGo標準`embed`で同梱する。既適用migrationを編集せず、必要な変更には後続versionを追加する。
-- 公開CLIのoption、JSON、stdout/stderr、exit code、保存先、設定、運用仕様を追加・変更しない。
-- Goおよびmigration SQLの説明コメントは、識別子・コンパイラ指示を除いて日本語で端的に記述し、英語の説明語を残さない。
-- Goの複数要素の配列・sliceリテラルは、各要素を1行ずつに記述する。
-- Goの複合リテラルは、各フィールドを1行ずつに記述する。`scripts/check_composite_literal_layout.sh`で違反を検査する。
-- SQLite adapterのSQL文は、使う関数の直前に個別のパッケージレベル定数として置き、複数行で整形する。関数内へ直接記述しない。
-- SQLへ値を渡すときは`?`プレースホルダーを使う。固定個数の`IN`条件を文字列置換で組み立てない。
-- unit testはテーブル駆動で記述し、Skill配下の`scripts/check_test_coverage.sh`で全対象packageのstatement coverage 100%を確認する。
-- 実行環境上再現不能な分岐がある場合は、対象コードへ日本語の理由をコメントし、テスト可能な内部依存を注入してカバーする。
-
-## File Placement Rules
-
-- CLI process entry: `cmd/knowledge/`
-- application: `internal/application/`
-- domainモデル・不変条件・永続化port: `internal/domain/`
-- SQLite adapter、SQL、migration runner、派生Index: `internal/persistence/sqlite/`
-- 不変migration asset: `internal/persistence/sqlite/migrations/`
-- 再現可能なfixture: `testdata/fixtures/`
-- CLI／SQLiteのprocess境界integration test: `test/integration/`
-
-## Autonomous Decisions
-
-- 承認済み責務境界の内側での非公開型、関数、package分割、test helper、fixture構成を選択できる。
-- 既存コードと設計に従い、最小の内部実装を選択できる。
-- 不明な公開契約は推測で補わず、設計資料を確認する。
-
-## Escalate When
-
-- 新しい公開CLI option、JSON field、error code、exit code、設定、保存先、運用契約が必要になる。
-- 新しいlibrary、framework、SQLite driver、Go version、またはArchitecture境界の変更が必要になる。
-- 詳細設計・Decision・実行可能な既存コードが矛盾し、局所的な実装判断で解決できない。
-
-## Procedure
-
-1. 対象Issueと対応する`implementation-handoff.yaml`を読み、依存Taskの完了を確認する。
-2. 対象操作の詳細設計から、option、JSON、validation、SQL、transaction、fixture・受入条件を抽出する。
-3. 既存の近接コードを確認し、責務境界を越えない最小の実装を行う。
-4. unit testと、必要なCLI process境界のintegration testを追加または更新する。testごとに隔離SQLite DBを使い、公開DB指定optionや設定を追加しない。
-   - 利用者が確認すべきCLIコマンドの棚卸しと自動検証を求めた場合、入力引数、期待stdout、期待stderr JSON、exit codeを`testdata/fixtures/`へ置き、`test/integration/`から実バイナリを起動して検証する。fixtureを公開運用コマンドや別の利用者向け実行ファイルとして扱わない。
-   - Taskfileは開発用の実行入口であり、fixtureや期待結果の正本にしない。Taskfileへのtest task追加・維持はユーザーの指定に従う。
-   - 未実装の後続操作で成功結果を検証できない場合は、そのケースの現時点の期待結果と、成功契約を検証する後続Taskを明確に分ける。
-5. migrationは初回適用、再実行、失敗時rollbackを確認する。mutationはcommit後だけ成功responseを返し、失敗時は部分更新を残さない。
-6. 検証を実行し、設計との不一致はPlanning成果物を勝手に変えず報告する。
-7. 完了報告の前に、対象Issueの受入条件を実施結果へ更新する。検証済みの項目だけを完了にし、未対応または未検証の項目は未完了のまま理由をIssueへ記録する。
-
-## Validation
-
-- `gofmt` を変更したGoファイルに実行する。
-- `go test ./...`
-- `go vet ./...`
-- `task lint`
-- `.agents/skills/impl-knowledge-cli/scripts/check_test_coverage.sh`
-- 変更内容に応じて、対象のCLI process integration testとmigrationの初回・再実行・rollback検証を実行する。
+- authority、入力packet、出力packet、verdictは共通契約へ一元化し、role間で同じ説明を再解釈しない。
+- 編集中は変更近傍のtestを先に回し、失敗を早く局所化する。candidate完成前に毎回full suiteを回さない。
+- candidate完成時の`gofmt`、`go test ./...`、`go vet ./...`、lint、対象coverage、必要なprocess integration testは省略しない。有効な最新証拠はreviewerが重複実行せず、欠落・陳腐化・疑義がある範囲だけ再実行する。
+- test成功は観測した範囲の証拠であり、受入条件・公開I/O・migration・transaction・全体利用との対応付けを別に確認する。
+- reviewerとauditorは独立させるが、最終監査はユーザー指定どおりコードレビュー合格後に直列実行する。
 
 ## Completion Criteria
 
-- 対象Taskの受入条件と操作別設計を満たす。
-- application/domain/persistence/CLIの依存方向を守る。
-- migration、transaction、公開I/Oを該当するtestで検証する。
-- 利用者確認コマンドを求められた場合、fixtureとprocess境界testが引数、stdout、stderr JSON、exit codeを対応付けている。
-- 未承認の公開契約またはArchitecture/Product Decisionを導入しない。
-- 完了報告前に、対象Issueの受入条件が実際の対応状況と一致している。
+- Verification Packetが`READY`である。
+- 同一candidate IDへCode Review ReportとConformance Audit Reportがともに`PASS`である。
+- 必須検証が同一candidateの最新証拠として成功している。
+- 未承認の公開契約またはArchitecture/Product Decisionを導入していない。
+- Issue Finalization後の再読結果が、受入条件・検証証拠・未完了項目と一致している。

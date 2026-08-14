@@ -3,10 +3,12 @@ target_skill: impl-knowledge-cli
 scenario: GitHub Issueに定義された受入条件を満たすKnowledge CLI実装を完了報告する依頼。
 input_summary: Issue #180のRelation検索操作を実装し、テストとlintが成功したため、利用者へ完了を報告する。
 expected:
-  - 最終報告の前に対象Issueを確認し、検証済みの受入条件だけを完了へ更新する。
+  - 同一candidateのreviewと最終整合性監査がともにPASSした後だけ対象Issueを更新する。
   - 未対応または未検証の受入条件は未完了のままにし、理由をIssueへ記録する。
+  - 更新後のIssueを再読し、受入条件と検証証拠が一致することを確認する。
   - 最終報告ではIssue上の受入条件の更新状況と実際の検証結果を一致させる。
 forbidden:
+  - reviewまたは最終整合性監査の前に受入条件を完了へ更新する。
   - 受入条件を更新せずに、すべて完了したと利用者へ報告する。
   - 未検証の受入条件を完了として更新する。
   - Issueの受入条件を削除または実装に合わせて弱める。

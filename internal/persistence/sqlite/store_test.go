@@ -41,7 +41,17 @@ func (coverageConnection) Close() error {
 }
 
 func (coverageConnection) Begin() (driver.Tx, error) {
-	return nil, errors.New("開始できないトランザクション")
+	return coverageTransaction{}, nil
+}
+
+type coverageTransaction struct{}
+
+func (coverageTransaction) Commit() error {
+	return nil
+}
+
+func (coverageTransaction) Rollback() error {
+	return nil
 }
 
 func (coverageConnection) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
@@ -155,6 +165,202 @@ func TestEmbeddedMigrations(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRegisteredMigrations(t *testing.T) {
+	original := migrationFileSystem
+	t.Cleanup(func() { migrationFileSystem = original })
+	migrations, err := registeredMigrations()
+	if err != nil {
+		t.Fatalf("registeredMigrations() error = %v", err)
+	}
+	if len(migrations) != 2 || migrations[1].version != 2 || migrations[1].apply == nil {
+		t.Fatalf("registered migrations = %#v", migrations)
+	}
+	migrationFileSystem = fstest.MapFS{}
+	if _, err := registeredMigrations(); err == nil {
+		t.Fatal("不正な移行ファイルシステムで成功しました")
+	}
+}
+
+func TestNormalizedTemporalValue(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   sql.NullString
+		want    string
+		wantErr bool
+	}{
+		{
+			name:  "null",
+			value: sql.NullString{},
+		},
+		{
+			name: "UTCへ正規化",
+			value: sql.NullString{
+				String: "2026-08-14T09:00:00+09:00",
+				Valid:  true,
+			},
+			want: "2026-08-14T00:00:00.000000000Z",
+		},
+		{
+			name: "不正な時刻",
+			value: sql.NullString{
+				String: "today",
+				Valid:  true,
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizedTemporalValue(tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("normalizedTemporalValue() error = %v, wantErr %t", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+
+			if !tt.value.Valid {
+				if got != nil {
+					t.Fatalf("normalizedTemporalValue() = %q, want nil", *got)
+				}
+
+				return
+			}
+
+			if got == nil || *got != tt.want {
+				if got == nil {
+					t.Fatalf("normalizedTemporalValue() = nil, want %q", tt.want)
+				}
+				t.Fatalf("normalizedTemporalValue() = %q, want %q", *got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeTemporalMetadataRejectsInvalidValues(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []any
+	}{
+		{
+			name:   "valid_untilが不正",
+			values: []any{"2026-08-14T00:00:00Z", "today", nil, nil},
+		},
+		{
+			name:   "observed_atが不正",
+			values: []any{nil, nil, "today", nil},
+		},
+		{
+			name:   "last_verifiedが不正",
+			values: []any{nil, nil, nil, "today"},
+		},
+		{
+			name:   "有効期間が逆順",
+			values: []any{"2026-08-15T00:00:00Z", "2026-08-14T00:00:00Z", nil, nil},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := temporalMetadataDatabase(t)
+			t.Cleanup(func() { _ = db.Close() })
+			if _, err := db.ExecContext(context.Background(), "INSERT INTO temporal_metadata (assertion_id, revision, valid_from, valid_until, observed_at, last_verified) VALUES ('asrt_01', 1, ?, ?, ?, ?)", tt.values...); err != nil {
+				t.Fatalf("時点情報を作る: %v", err)
+			}
+			tx, err := db.BeginTx(context.Background(), nil)
+			if err != nil {
+				t.Fatalf("transactionを開始する: %v", err)
+			}
+			defer func() { _ = tx.Rollback() }()
+			if err := normalizeTemporalMetadata(context.Background(), tx); err == nil {
+				t.Fatal("不正な時点情報を受理しました")
+			}
+		})
+	}
+}
+
+func TestNormalizeTemporalMetadataHandlesDatabaseFailures(t *testing.T) {
+	original := coverageQuery
+	t.Cleanup(func() { coverageQuery = original })
+	tests := []struct {
+		name    string
+		handler func(string) (driver.Rows, error)
+	}{
+		{
+			name:    "照会失敗",
+			handler: func(string) (driver.Rows, error) { return nil, errors.New("照会失敗") },
+		},
+		{
+			name: "行走査失敗",
+			handler: func(string) (driver.Rows, error) {
+				return &coverageRows{
+					columns: []string{"assertion_id"},
+					values:  [][]driver.Value{{nil}},
+				}, nil
+			},
+		},
+		{
+			name: "反復失敗",
+			handler: func(string) (driver.Rows, error) {
+				return &coverageRows{
+					columns: []string{"assertion_id", "revision", "valid_from", "valid_until", "observed_at", "last_verified"},
+					err:     errors.New("反復失敗"),
+				}, nil
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			coverageQuery = tt.handler
+			db, err := sql.Open(coverageDriverName, "")
+			if err != nil {
+				t.Fatalf("coverage用DBを開く: %v", err)
+			}
+			defer db.Close()
+			tx, err := db.BeginTx(context.Background(), nil)
+			if err != nil {
+				t.Fatalf("transactionを開始する: %v", err)
+			}
+			defer func() { _ = tx.Rollback() }()
+			if err := normalizeTemporalMetadata(context.Background(), tx); err == nil {
+				t.Fatal("DB失敗を返しません")
+			}
+		})
+	}
+}
+
+func TestNormalizeTemporalMetadataRejectsUpdateFailure(t *testing.T) {
+	db := temporalMetadataDatabase(t)
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.ExecContext(context.Background(), `
+INSERT INTO temporal_metadata (assertion_id, revision, valid_from) VALUES ('asrt_01', 1, '2026-08-14T00:00:00Z');
+CREATE TRIGGER reject_temporal_update BEFORE UPDATE ON temporal_metadata BEGIN SELECT RAISE(FAIL, 'update failure'); END;
+`); err != nil {
+		t.Fatalf("更新失敗用の時点情報を作る: %v", err)
+	}
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("transactionを開始する: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := normalizeTemporalMetadata(context.Background(), tx); err == nil {
+		t.Fatal("更新失敗を返しません")
+	}
+}
+
+func temporalMetadataDatabase(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := sql.Open(driverName, filepath.Join(t.TempDir(), "temporal-metadata.db"))
+	if err != nil {
+		t.Fatalf("DBを開く: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), `CREATE TABLE temporal_metadata (assertion_id TEXT NOT NULL, revision INTEGER NOT NULL, valid_from TEXT, valid_until TEXT, observed_at TEXT, last_verified TEXT, PRIMARY KEY (assertion_id, revision))`); err != nil {
+		_ = db.Close()
+		t.Fatalf("時点情報テーブルを作る: %v", err)
+	}
+
+	return db
 }
 
 func TestSchemaStateHandlesCatalogFailures(t *testing.T) {
@@ -448,6 +654,206 @@ INSERT INTO relations (relation_id, source_kind, source_id, relation_type, targe
 		if got.RelationID != want.RelationID || got.Direction != want.Direction || got.SeedID != want.SeedID || got.Target.Kind != want.Target.Kind || got.Target.ID != want.Target.ID {
 			t.Fatalf("Concept selectorの矛盾候補[%d] = %+v, want %+v", index, got, want)
 		}
+	}
+}
+
+func TestTemporalSearches(t *testing.T) {
+	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "temporal.db"))
+	if err != nil {
+		t.Fatalf("Storeを開く: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	_, err = store.db.ExecContext(context.Background(), `
+INSERT INTO assertions (assertion_id, current_revision, created_at) VALUES ('asrt_01', 1, 'now'), ('asrt_02', 1, 'now'), ('asrt_03', 1, 'now');
+INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at) VALUES ('asrt_01', 1, 'first', 'now'), ('asrt_02', 1, 'second', 'now'), ('asrt_03', 1, 'without temporal', 'now');
+INSERT INTO concepts (concept_id, name, created_at) VALUES ('cpt_01', 'channel', 'now');
+INSERT INTO concept_aliases (alias, concept_id) VALUES ('chan', 'cpt_01');
+INSERT INTO assertion_concepts (assertion_id, concept_id) VALUES ('asrt_01', 'cpt_01'), ('asrt_02', 'cpt_01'), ('asrt_03', 'cpt_01');
+INSERT INTO revision_scopes (assertion_id, revision, scope_key, scope_value) VALUES ('asrt_01', 1, 'language', 'Go'), ('asrt_01', 1, 'os', 'macOS'), ('asrt_02', 1, 'language', 'Go');
+INSERT INTO temporal_metadata (assertion_id, revision, valid_from, valid_until, version_scope, observed_at) VALUES ('asrt_01', 1, '2026-01-01T00:00:00.000000000Z', '2026-12-31T23:59:59.000000000Z', 'Go 1.26', '2026-08-14T00:00:00.000000000Z'), ('asrt_02', 1, '2025-01-01T00:00:00.000000000Z', NULL, 'Go 1.25', '2026-08-13T00:00:00.000000000Z'), ('asrt_03', 1, NULL, NULL, NULL, NULL);
+`)
+	if err != nil {
+		t.Fatalf("時点検索用データを作る: %v", err)
+	}
+	concept := "chan"
+	tests := []struct {
+		name    string
+		concept *string
+		scope   []domain.Scope
+		filter  domain.TemporalSearchFilter
+		wantIDs []string
+	}{
+		{
+			name:    "Concept Aliasで絞り込む",
+			concept: &concept,
+			wantIDs: []string{
+				"asrt_01",
+				"asrt_02",
+				"asrt_03",
+			},
+		},
+		{
+			name: "複数ScopeをAND集合で絞り込む",
+			scope: []domain.Scope{
+				{
+					Key:   "language",
+					Value: "Go",
+				},
+				{
+					Key:   "os",
+					Value: "macOS",
+				},
+			},
+			wantIDs: []string{
+				"asrt_01",
+			},
+		},
+		{
+			name: "一致しないScopeは空結果",
+			scope: []domain.Scope{
+				{
+					Key:   "os",
+					Value: "Linux",
+				},
+			},
+			wantIDs: []string{},
+		},
+		{
+			name: "時点を含む有効期間で絞り込む",
+			filter: domain.TemporalSearchFilter{
+				At: temporalString("2026-06-01T00:00:00.000000000Z"),
+			},
+			wantIDs: []string{
+				"asrt_01",
+				"asrt_02",
+			},
+		},
+		{
+			name: "終端なしの有効期間を時点で絞り込む",
+			filter: domain.TemporalSearchFilter{
+				At: temporalString("2027-01-01T00:00:00.000000000Z"),
+			},
+			wantIDs: []string{
+				"asrt_02",
+			},
+		},
+		{
+			name: "期間の重なりで絞り込む",
+			filter: domain.TemporalSearchFilter{
+				ValidFrom:  temporalString("2026-12-31T23:59:59.000000000Z"),
+				ValidUntil: temporalString("2027-01-01T00:00:00.000000000Z"),
+			},
+			wantIDs: []string{
+				"asrt_01",
+				"asrt_02",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results, err := store.SearchTemporal(context.Background(), tt.concept, tt.scope, tt.filter)
+			if err != nil {
+				t.Fatalf("SearchTemporal() = %v", err)
+			}
+			if len(results) != len(tt.wantIDs) {
+				t.Fatalf("結果数 = %d, want %d", len(results), len(tt.wantIDs))
+			}
+			for index, wantID := range tt.wantIDs {
+				if results[index].AssertionID != wantID {
+					t.Fatalf("result[%d].AssertionID = %q, want %q", index, results[index].AssertionID, wantID)
+				}
+			}
+		})
+	}
+}
+
+func temporalString(value string) *string {
+	return &value
+}
+
+func TestSearchTemporalHandlesFailures(t *testing.T) {
+	originalMarshalScope := marshalScope
+	originalWaitForIntegrationGate := waitForIntegrationGate
+	t.Cleanup(func() {
+		marshalScope = originalMarshalScope
+		waitForIntegrationGate = originalWaitForIntegrationGate
+	})
+	tests := []struct {
+		name    string
+		gate    func(context.Context, string) error
+		marshal func(any) ([]byte, error)
+		handler func(string) (driver.Rows, error)
+	}{
+		{
+			name: "読取開始前の中断",
+			gate: func(context.Context, string) error {
+				return context.Canceled
+			},
+		},
+		{
+			name: "Scope符号化の失敗",
+			marshal: func(any) ([]byte, error) {
+				return nil, errors.New("符号化失敗")
+			},
+		},
+		{
+			name: "照会の失敗",
+			handler: func(string) (driver.Rows, error) {
+				return nil, errors.New("照会失敗")
+			},
+		},
+		{
+			name: "行の読込失敗",
+			handler: func(string) (driver.Rows, error) {
+				return &coverageRows{
+					columns: []string{
+						"assertion_id",
+					},
+					values: [][]driver.Value{
+						{nil},
+					},
+				}, nil
+			},
+		},
+		{
+			name: "行の走査失敗",
+			handler: func(string) (driver.Rows, error) {
+				return &coverageRows{
+					columns: []string{
+						"assertion_id",
+					},
+					err: errors.New("走査失敗"),
+				}, nil
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			marshalScope = originalMarshalScope
+			waitForIntegrationGate = originalWaitForIntegrationGate
+			if tt.gate != nil {
+				waitForIntegrationGate = tt.gate
+			}
+			if tt.marshal != nil {
+				marshalScope = tt.marshal
+			}
+			if tt.handler == nil {
+				if _, err := (&Store{}).SearchTemporal(context.Background(), nil, nil, domain.TemporalSearchFilter{}); err == nil {
+					t.Fatal("開始または符号化の失敗を返しません")
+				}
+
+				return
+			}
+			coverageQuery = tt.handler
+			database, err := sql.Open(coverageDriverName, "")
+			if err != nil {
+				t.Fatalf("coverage用DBを開く: %v", err)
+			}
+			t.Cleanup(func() { _ = database.Close() })
+			if _, err := (&Store{db: database}).SearchTemporal(context.Background(), nil, nil, domain.TemporalSearchFilter{}); err == nil {
+				t.Fatal("読取失敗を返しません")
+			}
+		})
 	}
 }
 
@@ -797,7 +1203,7 @@ func schemaObjectRows() driver.Rows {
 	}
 }
 
-func TestOpenAppliesV1SchemaAndRerunsWithoutChange(t *testing.T) {
+func TestOpenAppliesSchemaAndRerunsWithoutChange(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "knowledge.db")
@@ -806,7 +1212,7 @@ func TestOpenAppliesV1SchemaAndRerunsWithoutChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	assertSchemaVersion(t, store.db, 1)
+	assertSchemaVersion(t, store.db, 2)
 	assertSchemaObjects(t, store.db)
 	if err := store.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
@@ -817,7 +1223,91 @@ func TestOpenAppliesV1SchemaAndRerunsWithoutChange(t *testing.T) {
 		t.Fatalf("second Open() error = %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	assertSchemaVersion(t, store.db, 1)
+	assertSchemaVersion(t, store.db, 2)
+}
+
+func TestOpenMigratesV1TemporalMetadata(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "v1-temporal.db")
+	db := openV1Database(t, path)
+	if _, err := db.ExecContext(ctx, `
+INSERT INTO assertions (assertion_id, current_revision, created_at) VALUES ('asrt_01', 1, 'now');
+INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at) VALUES ('asrt_01', 1, 'text', 'now');
+INSERT INTO temporal_metadata (assertion_id, revision, valid_from, valid_until, observed_at, last_verified) VALUES ('asrt_01', 1, '2026-08-14T09:00:00+09:00', '2026-08-15T00:00:00Z', '2026-08-14T00:00:00Z', '2026-08-14T00:00:00.1Z');
+`); err != nil {
+		t.Fatalf("v1の時点情報を作る: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("v1 DBを閉じる: %v", err)
+	}
+	store, err := Open(ctx, path)
+	if err != nil {
+		t.Fatalf("v2へ移行して開く: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	assertSchemaVersion(t, store.db, 2)
+	var validFrom, validUntil, observedAt, lastVerified string
+	if err := store.db.QueryRowContext(ctx, "SELECT valid_from, valid_until, observed_at, last_verified FROM temporal_metadata WHERE assertion_id = 'asrt_01'").Scan(&validFrom, &validUntil, &observedAt, &lastVerified); err != nil {
+		t.Fatalf("正規化済み時点情報を読む: %v", err)
+	}
+	if got, want := []string{validFrom, validUntil, observedAt, lastVerified}, []string{"2026-08-14T00:00:00.000000000Z", "2026-08-15T00:00:00.000000000Z", "2026-08-14T00:00:00.000000000Z", "2026-08-14T00:00:00.100000000Z"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("正規化値 = %v, want %v", got, want)
+	}
+}
+
+func TestOpenRollsBackInvalidV1TemporalMetadata(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "invalid-v1-temporal.db")
+	db := openV1Database(t, path)
+	if _, err := db.ExecContext(ctx, `
+INSERT INTO assertions (assertion_id, current_revision, created_at) VALUES ('asrt_01', 1, 'now');
+INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at) VALUES ('asrt_01', 1, 'text', 'now');
+INSERT INTO temporal_metadata (assertion_id, revision, valid_from) VALUES ('asrt_01', 1, 'not-a-time');
+`); err != nil {
+		t.Fatalf("不正なv1の時点情報を作る: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("v1 DBを閉じる: %v", err)
+	}
+	if _, err := Open(ctx, path); err == nil {
+		t.Fatal("不正な時点情報でOpenが成功しました")
+	}
+	db, err := sql.Open(driverName, path)
+	if err != nil {
+		t.Fatalf("移行失敗後のDBを開く: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	var value string
+	if err := db.QueryRowContext(ctx, "SELECT valid_from FROM temporal_metadata WHERE assertion_id = 'asrt_01'").Scan(&value); err != nil {
+		t.Fatalf("移行失敗後の値を読む: %v", err)
+	}
+	if value != "not-a-time" {
+		t.Fatalf("移行失敗後の値 = %q", value)
+	}
+	assertSchemaVersion(t, db, 1)
+}
+
+func openV1Database(t *testing.T, path string) *sql.DB {
+	t.Helper()
+	db, err := sql.Open(driverName, path)
+	if err != nil {
+		t.Fatalf("v1 DBを開く: %v", err)
+	}
+	script, err := fs.ReadFile(migrationFiles, "migrations/0001_initial.sql")
+	if err != nil {
+		_ = db.Close()
+		t.Fatalf("v1 migrationを読む: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), string(script)); err != nil {
+		_ = db.Close()
+		t.Fatalf("v1 migrationを適用する: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), "INSERT INTO schema_migrations (version, applied_at) VALUES (1, '2026-08-14T00:00:00Z')"); err != nil {
+		_ = db.Close()
+		t.Fatalf("v1 migration履歴を記録する: %v", err)
+	}
+
+	return db
 }
 
 func TestOpenRejectsPartialSchemaWithoutChanges(t *testing.T) {
@@ -1054,7 +1544,7 @@ func TestOpenEnablesForeignKeysForStoreConnection(t *testing.T) {
 func assertSchemaVersion(t *testing.T, db *sql.DB, want int) {
 	t.Helper()
 	var got int
-	if err := db.QueryRowContext(context.Background(), "SELECT version FROM schema_migrations").Scan(&got); err != nil {
+	if err := db.QueryRowContext(context.Background(), "SELECT max(version) FROM schema_migrations").Scan(&got); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
 	if got != want {
