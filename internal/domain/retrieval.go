@@ -9,6 +9,9 @@ import (
 // ErrAssertionNotFound は指定されたAssertionが存在しないことを示す。
 var ErrAssertionNotFound = errors.New("assertion not found")
 
+// ErrRelationSeedNotFound はRelation検索起点が存在しないことを示す。
+var ErrRelationSeedNotFound = errors.New("relation seed not found")
+
 // Concept は検索アンカーとなるConceptを表す。
 type Concept struct {
 	ID   string
@@ -90,10 +93,35 @@ type EvidenceResult struct {
 	Evidence    []Evidence
 }
 
+// RelationTarget はRelation検索で検索起点の反対側を表す。
+type RelationTarget struct {
+	Kind           string
+	ID             string
+	NormalizedText *string
+}
+
+// RelatedResult は検索起点に接続するRelationを表す。
+type RelatedResult struct {
+	RelationID   string
+	RelationType string
+	Direction    string
+	Target       RelationTarget
+}
+
+// ContradictionResult は矛盾候補の検索起点と相手を表す。
+type ContradictionResult struct {
+	RelationID string
+	Direction  string
+	SeedID     string
+	Target     RelationTarget
+}
+
 // RetrievalStore は読取操作が必要とする永続化portである。
 type RetrievalStore interface {
 	SearchText(context.Context, string) ([]AssertionSummary, error)
 	SearchConcept(context.Context, string) (ConceptSearchResult, error)
 	GetAssertion(context.Context, string) (AssertionDetail, error)
 	GetEvidence(context.Context, string) (EvidenceResult, error)
+	SearchRelated(context.Context, string, string, []string) ([]RelatedResult, error)
+	SearchContradictions(context.Context, *string, *string) ([]ContradictionResult, error)
 }

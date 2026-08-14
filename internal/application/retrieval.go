@@ -38,3 +38,13 @@ func (s RetrievalService) Get(ctx context.Context, assertionID string) (domain.A
 func (s RetrievalService) GetEvidence(ctx context.Context, assertionID string) (domain.EvidenceResult, error) {
 	return s.store.GetEvidence(ctx, assertionID)
 }
+
+// SearchRelated は検索起点に接続するRelationを取得する。
+func (s RetrievalService) SearchRelated(ctx context.Context, kind string, id string, relationTypes []string) ([]domain.RelatedResult, error) {
+	return s.store.SearchRelated(ctx, kind, id, relationTypes)
+}
+
+// SearchContradictions は矛盾候補を取得する。
+func (s RetrievalService) SearchContradictions(ctx context.Context, assertionID *string, concept *string) ([]domain.ContradictionResult, error) {
+	return s.store.SearchContradictions(ctx, assertionID, concept)
+}
