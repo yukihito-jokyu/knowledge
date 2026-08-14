@@ -61,4 +61,4 @@ Goは単一バイナリとして配布しやすく、決定論的なCLI、SQLite
 - 開発・CIで実行する `gofmt`、`go test ./...`、`go vet ./...` の対象環境。
 - `internal/persistence/sqlite` の接続初期化とintegration test。
 
-公開CLIのoption、JSON、終了コード、SQLite schema、保存先、設定、運用仕様は変更しない。
+公開CLIのoption、JSON、終了コード、SQLite schemaは変更しない。通常ビルドの既定保存先は、後続のDEC-FEAT-005でL3 Decisionとして定める。
