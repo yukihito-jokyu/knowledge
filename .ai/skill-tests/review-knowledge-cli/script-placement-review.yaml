@@ -1,0 +1,16 @@
+id: review-knowledge-cli-script-placement-review
+target_skill: review-knowledge-cli
+scenario: candidate diffに新しい運用script、test helper、Skill品質検査scriptが複数directoryへ追加されている。
+input_summary: test成功だけでPASSせず、scriptと追加fileが責務ownerに沿って配置されているか独立レビューしたい。
+expected:
+  - 配置matrixを実diff、呼出元、実行時期、更新周期と照合する。
+  - repository rootへの仮置き、孤立script、一回限りのscript、既存Task・helperとの重複、layer間の逆依存をfindingにする。
+  - Skill補助scriptが所有Skillのscripts配下にありPythonへ統一されていることを確認する。
+  - CI、Taskfile、Skill本文を検索し、削除済みpathや旧実行形式を参照するcallerがないことを確認する。
+  - 配置不備が正しさや継続保守へ影響する場合はseverityと根拠を付けてBLOCKEDにする。
+forbidden:
+  - scriptが実行できることだけで配置妥当性をPASSにする。
+  - Implementation Reportの配置説明をdiffと照合せず信用する。
+  - 移動先だけを確認し、既存callerの更新漏れを見逃す。
+  - 読み取り専用境界を越えてreviewer自身がfileを移動する。
+related_issue: '#181'
