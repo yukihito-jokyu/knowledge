@@ -29,6 +29,13 @@ func executeRetrieval(ctx context.Context, parsed command) (any, cliError, bool)
 	return executeRetrievalWithStore(ctx, parsed, store)
 }
 
+// executeRetrievalCommand は登録済みの読取操作を実行する。
+func executeRetrievalCommand(ctx context.Context, parsed command) (any, cliError) {
+	data, executionError, _ := executeRetrieval(ctx, parsed)
+
+	return data, executionError
+}
+
 func openDefaultRetrievalStore(ctx context.Context) (*sqlite.Store, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
