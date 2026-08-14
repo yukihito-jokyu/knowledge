@@ -1,0 +1,18 @@
+id: impl-knowledge-cli-orchestrated-delegation
+target_skill: impl-knowledge-cli
+scenario: Knowledge CLIの公開時点検索をIssueから実装する依頼。
+input_summary: 要件、設計、Decision、handoff、Issue、既存コードを参照して実装を完了したい。
+expected:
+  - baselineと既存変更を記録し、仕様照合subagentがVerification PacketをREADYと判定してから実装する。
+  - 実装subagentだけが製品コード、test、fixtureを変更し、candidate ID・source ID・verdict付きのImplementation Reportを返す。
+  - 独立review subagentが同一candidateを読み取り専用で確認し、finding IDとverdictを返す。
+  - reviewがPASSした同一candidateだけを、別の最終整合性監査subagentが要件・仕様・全体利用経路と照合する。
+  - reviewとauditが同一candidateへPASSした後だけIssueを更新し、再読して証拠との一致を確認する。
+  - 有効な指摘は実装へ差し戻し、契約に関わる指摘は仕様照合から再実行する。
+forbidden:
+  - 同一subagentに実装と最終レビューを兼任させる。
+  - review前にauditを開始する、または異なるcandidateのPASSを組み合わせる。
+  - 実装前の仕様照合だけで、実装後の全体整合性監査を省略する。
+  - reviewまたはauditのPASS前にIssueの受入条件を完了へ更新する。
+  - 未承認の公開CLI契約を実装する。
+related_issue: '#181'
