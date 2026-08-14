@@ -12,6 +12,12 @@ var ErrAssertionNotFound = errors.New("assertion not found")
 // ErrRelationSeedNotFound はRelation検索起点が存在しないことを示す。
 var ErrRelationSeedNotFound = errors.New("relation seed not found")
 
+// ErrCreateConflict は作成対象が既存データと衝突したことを示す。
+var ErrCreateConflict = errors.New("create conflict")
+
+// ErrCreateRelationTargetNotFound はRelationの参照先が存在しないことを示す。
+var ErrCreateRelationTargetNotFound = errors.New("create relation target not found")
+
 // Concept は検索アンカーとなるConceptを表す。
 type Concept struct {
 	ID   string
@@ -139,4 +145,46 @@ type RetrievalStore interface {
 	SearchRelated(context.Context, string, string, []string) ([]RelatedResult, error)
 	SearchContradictions(context.Context, *string, *string) ([]ContradictionResult, error)
 	SearchTemporal(context.Context, *string, []Scope, TemporalSearchFilter) ([]TemporalSearchResult, error)
+}
+
+// CreateRequest はAssertion初版と付随データの作成入力を表す。
+type CreateRequest struct {
+	NormalizedText string
+	Scope          []Scope
+	Concepts       []CreateConcept
+	Aliases        []AssertionAlias
+	Relations      []CreateRelation
+	Evidence       []CreateEvidence
+	Temporal       *Temporal
+}
+
+type CreateConcept struct {
+	Name    string
+	Aliases []string
+}
+
+type CreateRelation struct {
+	Type       string
+	TargetKind string
+	TargetID   string
+}
+
+type CreateEvidence struct {
+	Kind       string
+	RawText    string
+	ObservedAt string
+}
+
+// CreateResult はcommit済みの作成結果を表す。
+type CreateResult struct {
+	AssertionID string
+	Revision    int
+	EvidenceIDs []string
+	Concepts    []Concept
+	RelationIDs []string
+}
+
+// CreateStore は作成操作が必要とする永続化portである。
+type CreateStore interface {
+	CreateAssertion(context.Context, CreateRequest) (CreateResult, error)
 }
