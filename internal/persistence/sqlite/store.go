@@ -735,3 +735,163 @@ func (s *Store) GetEvidence(ctx context.Context, assertionID string) (domain.Evi
 
 	return result, nil
 }
+
+const relationSeedExistsSQL = `
+SELECT 1
+FROM assertions
+WHERE assertion_id = ?
+UNION ALL
+SELECT 1
+FROM concepts
+WHERE concept_id = ?
+`
+
+const searchRelatedSQL = `
+SELECT r.relation_id,
+       r.relation_type,
+       CASE WHEN r.source_kind = ? AND r.source_id = ? THEN 'outgoing' ELSE 'incoming' END,
+       CASE WHEN r.source_kind = ? AND r.source_id = ? THEN r.target_kind ELSE r.source_kind END,
+       CASE WHEN r.source_kind = ? AND r.source_id = ? THEN r.target_id ELSE r.source_id END,
+       target_revision.normalized_text
+FROM relations AS r
+LEFT JOIN assertions AS target_assertion
+  ON (CASE WHEN r.source_kind = ? AND r.source_id = ? THEN r.target_kind ELSE r.source_kind END) = 'assertion'
+ AND target_assertion.assertion_id = (CASE WHEN r.source_kind = ? AND r.source_id = ? THEN r.target_id ELSE r.source_id END)
+LEFT JOIN assertion_revisions AS target_revision
+  ON target_revision.assertion_id = target_assertion.assertion_id
+ AND target_revision.revision = target_assertion.current_revision
+WHERE ((r.source_kind = ? AND r.source_id = ?)
+    OR (r.target_kind = ? AND r.target_id = ?))
+`
+
+// SearchRelated は検索起点から見たRelationの相手を取得する。
+func (s *Store) SearchRelated(ctx context.Context, kind string, id string, relationTypes []string) ([]domain.RelatedResult, error) {
+	var exists int
+	assertionID, conceptID := "", ""
+	if kind == "assertion" {
+		assertionID = id
+	} else {
+		conceptID = id
+	}
+	err := s.db.QueryRowContext(ctx, relationSeedExistsSQL, assertionID, conceptID).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrRelationSeedNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("check relation seed: %w", err)
+	}
+	query, arguments := relatedQuery(kind, id, relationTypes)
+	rows, err := s.db.QueryContext(ctx, query, arguments...)
+	if err != nil {
+		return nil, fmt.Errorf("search related: %w", err)
+	}
+	defer rows.Close()
+	results := make([]domain.RelatedResult, 0)
+	for rows.Next() {
+		var result domain.RelatedResult
+		var normalizedText sql.NullString
+		if err := rows.Scan(&result.RelationID, &result.RelationType, &result.Direction, &result.Target.Kind, &result.Target.ID, &normalizedText); err != nil {
+			return nil, fmt.Errorf("read related result: %w", err)
+		}
+		if normalizedText.Valid {
+			result.Target.NormalizedText = &normalizedText.String
+		}
+		results = append(results, result)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate related result: %w", err)
+	}
+
+	return results, nil
+}
+
+func relatedQuery(kind string, id string, relationTypes []string) (string, []any) {
+	arguments := []any{
+		kind,
+		id,
+		kind,
+		id,
+		kind,
+		id,
+		kind,
+		id,
+		kind,
+		id,
+		kind,
+		id,
+		kind,
+		id,
+	}
+	query := searchRelatedSQL
+	if len(relationTypes) > 0 {
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(relationTypes)), ",")
+		query += " AND r.relation_type IN (" + placeholders + ")"
+		for _, relationType := range relationTypes {
+			arguments = append(arguments, relationType)
+		}
+	}
+
+	return query + " ORDER BY r.relation_id ASC", arguments
+}
+
+const searchContradictionsSQL = `
+WITH selected_concept(concept_id) AS (
+  SELECT c.concept_id
+  FROM concepts AS c
+  LEFT JOIN concept_aliases AS ca ON ca.concept_id = c.concept_id
+  WHERE ? IS NOT NULL AND (c.name = ? OR ca.alias = ?)
+), selected_seed(assertion_id) AS (
+  SELECT ? WHERE ? IS NOT NULL
+  UNION
+  SELECT ac.assertion_id
+  FROM assertion_concepts AS ac
+  JOIN selected_concept AS sc ON sc.concept_id = ac.concept_id
+), candidates AS (
+  SELECT r.relation_id, 'outgoing' AS direction, ss.assertion_id AS seed_id, r.target_id
+  FROM relations AS r
+  JOIN selected_seed AS ss ON r.source_kind = 'assertion' AND r.source_id = ss.assertion_id
+  WHERE r.relation_type = 'contradicts' AND r.target_kind = 'assertion'
+  UNION ALL
+  SELECT r.relation_id, 'incoming' AS direction, ss.assertion_id AS seed_id, r.source_id
+  FROM relations AS r
+  JOIN selected_seed AS ss ON r.target_kind = 'assertion' AND r.target_id = ss.assertion_id
+  WHERE r.relation_type = 'contradicts' AND r.source_kind = 'assertion'
+)
+SELECT c.relation_id, c.direction, c.seed_id, c.target_id, r.normalized_text
+FROM candidates AS c
+JOIN assertions AS a ON a.assertion_id = c.target_id
+JOIN assertion_revisions AS r ON r.assertion_id = a.assertion_id AND r.revision = a.current_revision
+ORDER BY c.relation_id ASC, c.seed_id ASC, c.direction ASC
+`
+
+// SearchContradictions は指定selectorに一致するAssertionの矛盾候補を取得する。
+func (s *Store) SearchContradictions(ctx context.Context, assertionID *string, concept *string) ([]domain.ContradictionResult, error) {
+	var assertionValue, conceptValue any
+	if assertionID != nil {
+		assertionValue = *assertionID
+	}
+	if concept != nil {
+		conceptValue = *concept
+	}
+	rows, err := s.db.QueryContext(ctx, searchContradictionsSQL, conceptValue, conceptValue, conceptValue, assertionValue, assertionValue)
+	if err != nil {
+		return nil, fmt.Errorf("search contradictions: %w", err)
+	}
+	defer rows.Close()
+	results := make([]domain.ContradictionResult, 0)
+	for rows.Next() {
+		var result domain.ContradictionResult
+		var normalizedText string
+		if err := rows.Scan(&result.RelationID, &result.Direction, &result.SeedID, &result.Target.ID, &normalizedText); err != nil {
+			return nil, fmt.Errorf("read contradiction result: %w", err)
+		}
+		result.Target.Kind = "assertion"
+		result.Target.NormalizedText = &normalizedText
+		results = append(results, result)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate contradiction result: %w", err)
+	}
+
+	return results, nil
+}
