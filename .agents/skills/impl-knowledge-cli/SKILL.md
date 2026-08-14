@@ -75,6 +75,9 @@ description: Knowledge CLIのGo実装におけるCLI境界、application/domain/
 2. 対象操作の詳細設計から、option、JSON、validation、SQL、transaction、fixture・受入条件を抽出する。
 3. 既存の近接コードを確認し、責務境界を越えない最小の実装を行う。
 4. unit testと、必要なCLI process境界のintegration testを追加または更新する。testごとに隔離SQLite DBを使い、公開DB指定optionや設定を追加しない。
+   - 利用者が確認すべきCLIコマンドの棚卸しと自動検証を求めた場合、入力引数、期待stdout、期待stderr JSON、exit codeを`testdata/fixtures/`へ置き、`test/integration/`から実バイナリを起動して検証する。fixtureを公開運用コマンドや別の利用者向け実行ファイルとして扱わない。
+   - Taskfileは開発用の実行入口であり、fixtureや期待結果の正本にしない。Taskfileへのtest task追加・維持はユーザーの指定に従う。
+   - 未実装の後続操作で成功結果を検証できない場合は、そのケースの現時点の期待結果と、成功契約を検証する後続Taskを明確に分ける。
 5. migrationは初回適用、再実行、失敗時rollbackを確認する。mutationはcommit後だけ成功responseを返し、失敗時は部分更新を残さない。
 6. 検証を実行し、設計との不一致はPlanning成果物を勝手に変えず報告する。
 
@@ -91,4 +94,5 @@ description: Knowledge CLIのGo実装におけるCLI境界、application/domain/
 - 対象Taskの受入条件と操作別設計を満たす。
 - application/domain/persistence/CLIの依存方向を守る。
 - migration、transaction、公開I/Oを該当するtestで検証する。
+- 利用者確認コマンドを求められた場合、fixtureとprocess境界testが引数、stdout、stderr JSON、exit codeを対応付けている。
 - 未承認の公開契約またはArchitecture/Product Decisionを導入しない。
