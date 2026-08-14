@@ -69,7 +69,7 @@ func TestExecuteRetrievalWithStore(t *testing.T) {
 			wantContext: true,
 		},
 		{
-			name: "対象外の操作",
+			name: "search-related",
 			arguments: []string{
 				"search-related",
 				"--seed-kind",
@@ -77,6 +77,44 @@ func TestExecuteRetrievalWithStore(t *testing.T) {
 				"--seed-id",
 				"asrt_01",
 			},
+			wantHandled: true,
+			wantData:    true,
+			wantContext: true,
+		},
+		{
+			name: "search-contradictions",
+			arguments: []string{
+				"search-contradictions",
+				"--concept",
+				"channel",
+			},
+			wantHandled: true,
+			wantData:    true,
+			wantContext: true,
+		},
+		{
+			name: "search-relatedのnot_found",
+			arguments: []string{
+				"search-related",
+				"--seed-kind",
+				"assertion",
+				"--seed-id",
+				"asrt_01",
+			},
+			store:       retrievalStoreStub{relatedError: domain.ErrRelationSeedNotFound},
+			wantHandled: true,
+			wantCode:    notFoundError,
+		},
+		{
+			name: "search-contradictionsのstorage_error",
+			arguments: []string{
+				"search-contradictions",
+				"--assertion-id",
+				"asrt_01",
+			},
+			store:       retrievalStoreStub{contradictionError: errors.New("read failure")},
+			wantHandled: true,
+			wantCode:    storageError,
 		},
 		{
 			name: "getのnot_found",
@@ -118,6 +156,13 @@ func TestExecuteRetrievalWithStore(t *testing.T) {
 				t.Fatal("ContextがStoreへ伝播しません")
 			}
 		})
+	}
+}
+
+func TestExecuteRetrievalWithStoreDoesNotHandleUnknownOperation(t *testing.T) {
+	_, _, handled := executeRetrievalWithStore(context.Background(), command{operation: "unknown"}, retrievalStoreStub{})
+	if handled {
+		t.Fatal("未知の操作を処理済みにしました")
 	}
 }
 
@@ -330,6 +375,31 @@ func TestRetrievalResponse(t *testing.T) {
 			},
 		},
 		{
+			name: "Relation検索結果",
+			value: []domain.RelatedResult{{
+				RelationID:   "rel_01",
+				RelationType: "causes",
+				Direction:    "outgoing",
+				Target: domain.RelationTarget{
+					Kind:           "assertion",
+					ID:             "asrt_02",
+					NormalizedText: &value,
+				},
+			}},
+		},
+		{
+			name: "矛盾候補検索結果",
+			value: []domain.ContradictionResult{{
+				RelationID: "rel_02",
+				Direction:  "incoming",
+				SeedID:     "asrt_02",
+				Target: domain.RelationTarget{
+					Kind: "assertion",
+					ID:   "asrt_01",
+				},
+			}},
+		},
+		{
 			name: "Assertion取得結果",
 			value: domain.AssertionDetail{
 				ID:              "asrt_01",
@@ -406,6 +476,37 @@ func TestRetrievalResponse(t *testing.T) {
 	}
 }
 
+func TestRetrievalCLIError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want errorCode
+	}{
+		{
+			name: "Relation検索起点なし",
+			err:  domain.ErrRelationSeedNotFound,
+			want: notFoundError,
+		},
+		{
+			name: "Assertionなし",
+			err:  domain.ErrAssertionNotFound,
+			want: notFoundError,
+		},
+		{
+			name: "保存失敗",
+			err:  errors.New("failure"),
+			want: storageError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := retrievalCLIError(tt.err); got.code != tt.want {
+				t.Fatalf("retrievalCLIError() = %q, want %q", got.code, tt.want)
+			}
+		})
+	}
+}
+
 func TestRunWithExecutor(t *testing.T) {
 	originalStdout := processStdout
 	t.Cleanup(func() { processStdout = originalStdout })
@@ -467,8 +568,10 @@ func TestRunWithExecutor(t *testing.T) {
 }
 
 type retrievalStoreStub struct {
-	getError        error
-	receivedContext *context.Context
+	getError           error
+	relatedError       error
+	contradictionError error
+	receivedContext    *context.Context
 }
 
 func (store retrievalStoreStub) SearchText(ctx context.Context, _ string) ([]domain.AssertionSummary, error) {
@@ -496,6 +599,46 @@ func (store retrievalStoreStub) GetEvidence(ctx context.Context, _ string) (doma
 	store.receive(ctx)
 
 	return domain.EvidenceResult{AssertionID: "asrt_01"}, nil
+}
+
+func (store retrievalStoreStub) SearchRelated(ctx context.Context, _ string, _ string, _ []string) ([]domain.RelatedResult, error) {
+	store.receive(ctx)
+	if store.relatedError != nil {
+		return nil, store.relatedError
+	}
+
+	text := "related"
+
+	return []domain.RelatedResult{{
+		RelationID:   "rel_01",
+		RelationType: "causes",
+		Direction:    "outgoing",
+		Target: domain.RelationTarget{
+			Kind:           "assertion",
+			ID:             "asrt_02",
+			NormalizedText: &text,
+		},
+	}}, nil
+}
+
+func (store retrievalStoreStub) SearchContradictions(ctx context.Context, _ *string, _ *string) ([]domain.ContradictionResult, error) {
+	store.receive(ctx)
+	if store.contradictionError != nil {
+		return nil, store.contradictionError
+	}
+
+	text := "contradiction"
+
+	return []domain.ContradictionResult{{
+		RelationID: "rel_02",
+		Direction:  "incoming",
+		SeedID:     "asrt_02",
+		Target: domain.RelationTarget{
+			Kind:           "assertion",
+			ID:             "asrt_01",
+			NormalizedText: &text,
+		},
+	}}, nil
 }
 
 func (store retrievalStoreStub) receive(ctx context.Context) {

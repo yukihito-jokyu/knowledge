@@ -11,3 +11,6 @@ INSERT INTO evidence (evidence_id, assertion_id, kind, raw_text, observed_at, cr
 INSERT INTO assertion_lexical_index (assertion_id, normalized_text, concept_name, concept_alias, scope_key, scope_value, assertion_alias) VALUES ('asrt_01', 'channel send', 'channel', 'chan', 'language', 'Go', 'ch');
 INSERT INTO assertions (assertion_id, current_revision, created_at) VALUES ('asrt_02', 1, '2026-08-14T00:00:00Z');
 INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at) VALUES ('asrt_02', 1, 'empty evidence', '2026-08-14T00:00:00Z');
+INSERT INTO assertion_concepts (assertion_id, concept_id) VALUES ('asrt_02', 'cpt_01');
+INSERT INTO relations (relation_id, source_kind, source_id, relation_type, target_kind, target_id, created_at) VALUES ('rel_01', 'assertion', 'asrt_01', 'causes', 'assertion', 'asrt_02', '2026-08-14T00:00:00Z');
+INSERT INTO relations (relation_id, source_kind, source_id, relation_type, target_kind, target_id, created_at) VALUES ('rel_02', 'assertion', 'asrt_01', 'contradicts', 'assertion', 'asrt_02', '2026-08-14T00:00:00Z');

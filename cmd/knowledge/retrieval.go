@@ -22,6 +22,10 @@ func executeRetrievalWithStore(ctx context.Context, parsed command, store domain
 		data, err = service.Get(ctx, values["assertion-id"][0])
 	case "get-evidence":
 		data, err = service.GetEvidence(ctx, values["assertion-id"][0])
+	case "search-related":
+		data, err = service.SearchRelated(ctx, values["seed-kind"][0], values["seed-id"][0], values["relation-type"])
+	case "search-contradictions":
+		data, err = service.SearchContradictions(ctx, optionalValue(values, "assertion-id"), optionalValue(values, "concept"))
 	default:
 		return nil, cliError{}, false
 	}
@@ -33,6 +37,12 @@ func executeRetrievalWithStore(ctx context.Context, parsed command, store domain
 }
 
 func retrievalCLIError(err error) cliError {
+	if errors.Is(err, domain.ErrRelationSeedNotFound) {
+		return cliError{
+			code:    notFoundError,
+			message: "検索起点が見つかりません",
+		}
+	}
 	if errors.Is(err, domain.ErrAssertionNotFound) {
 		return cliError{
 			code:    notFoundError,
@@ -74,9 +84,64 @@ func retrievalResponse(data any) any {
 			"assertion_id": value.AssertionID,
 			"evidence":     evidence,
 		}
+	case []domain.RelatedResult:
+		results := make([]map[string]any, 0, len(value))
+		for _, entry := range value {
+			results = append(results, relatedResponse(entry))
+		}
+
+		return map[string]any{"results": results}
+	case []domain.ContradictionResult:
+		results := make([]map[string]any, 0, len(value))
+		for _, entry := range value {
+			results = append(results, contradictionResponse(entry))
+		}
+
+		return map[string]any{"results": results}
 	default:
 		return nil
 	}
+}
+
+func optionalValue(values map[string][]string, name string) *string {
+	if len(values[name]) == 0 {
+		return nil
+	}
+
+	return &values[name][0]
+}
+
+func relatedResponse(value domain.RelatedResult) map[string]any {
+	return map[string]any{
+		"relation_id":   value.RelationID,
+		"relation_type": value.RelationType,
+		"direction":     value.Direction,
+		"target":        relationTargetResponse(value.Target),
+	}
+}
+
+func contradictionResponse(value domain.ContradictionResult) map[string]any {
+	return map[string]any{
+		"relation_id": value.RelationID,
+		"direction":   value.Direction,
+		"seed": map[string]any{
+			"kind": "assertion",
+			"id":   value.SeedID,
+		},
+		"target": relationTargetResponse(value.Target),
+	}
+}
+
+func relationTargetResponse(value domain.RelationTarget) map[string]any {
+	result := map[string]any{
+		"kind": value.Kind,
+		"id":   value.ID,
+	}
+	if value.NormalizedText != nil {
+		result["normalized_text"] = *value.NormalizedText
+	}
+
+	return result
 }
 
 func summariesResponse(values []domain.AssertionSummary) []map[string]any {
