@@ -2,28 +2,68 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 )
 
 var (
-	processArguments           = os.Args
-	processStdout    io.Writer = os.Stdout
-	processStderr    io.Writer = os.Stderr
-	exitProcess                = os.Exit
+	processArguments              = os.Args
+	processStdout       io.Writer = os.Stdout
+	processStderr       io.Writer = os.Stderr
+	exitProcess                   = os.Exit
+	parseCLICommand               = parseCommand
+	newInterruptContext           = newOSInterruptContext
 )
 
 func main() {
-	exitProcess(run(processArguments[1:], processStderr))
+	ctx, stop := newInterruptContext()
+	code := run(ctx, processArguments[1:], processStderr)
+	stop()
+	exitProcess(code)
 }
 
-func run(arguments []string, stderr io.Writer) int {
-	if _, err := parseCommand(arguments); err.code != "" {
+func newOSInterruptContext() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), os.Interrupt)
+}
+
+func run(ctx context.Context, arguments []string, stderr io.Writer) int {
+	return runWithExecutor(ctx, arguments, stderr, executeRetrieval)
+}
+
+type retrievalExecutor func(context.Context, command) (any, cliError, bool)
+
+func runWithExecutor(ctx context.Context, arguments []string, stderr io.Writer, execute retrievalExecutor) int {
+	if ctx.Err() != nil {
+		return interruptedExitCode
+	}
+	parsed, err := parseCLICommand(arguments)
+	if ctx.Err() != nil {
+		return interruptedExitCode
+	}
+	if err.code != "" {
 		writeError(stderr, err)
 
 		return exitCode(err.code)
+	}
+	if data, executionError, handled := execute(ctx, parsed); handled {
+		if ctx.Err() != nil {
+			return interruptedExitCode
+		}
+		if executionError.code != "" {
+			writeError(stderr, executionError)
+
+			return exitCode(executionError.code)
+		}
+		writeSuccess(processStdout, data)
+
+		return 0
+	}
+	if ctx.Err() != nil {
+		return interruptedExitCode
 	}
 
 	writeError(stderr, cliError{
@@ -85,6 +125,8 @@ const (
 	storageError    errorCode = "storage_error"
 	internalError   errorCode = "internal_error"
 )
+
+const interruptedExitCode = 130
 
 func exitCode(code errorCode) int {
 	switch code {
