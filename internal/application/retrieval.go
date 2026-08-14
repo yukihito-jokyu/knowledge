@@ -48,3 +48,8 @@ func (s RetrievalService) SearchRelated(ctx context.Context, kind string, id str
 func (s RetrievalService) SearchContradictions(ctx context.Context, assertionID *string, concept *string) ([]domain.ContradictionResult, error) {
 	return s.store.SearchContradictions(ctx, assertionID, concept)
 }
+
+// SearchTemporal は時点情報を持つ現行Assertionを取得する。
+func (s RetrievalService) SearchTemporal(ctx context.Context, concept *string, scope []domain.Scope, filter domain.TemporalSearchFilter) ([]domain.TemporalSearchResult, error) {
+	return s.store.SearchTemporal(ctx, concept, scope, filter)
+}

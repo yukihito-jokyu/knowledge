@@ -47,6 +47,12 @@ func (store retrievalStoreStub) SearchContradictions(ctx context.Context, _ *str
 	return []domain.ContradictionResult{}, nil
 }
 
+func (store retrievalStoreStub) SearchTemporal(ctx context.Context, _ *string, _ []domain.Scope, _ domain.TemporalSearchFilter) ([]domain.TemporalSearchResult, error) {
+	store.receive(ctx)
+
+	return []domain.TemporalSearchResult{}, nil
+}
+
 func (store retrievalStoreStub) receive(ctx context.Context) {
 	if store.receivedContext != nil {
 		*store.receivedContext = ctx
@@ -92,6 +98,15 @@ func TestRetrievalService(t *testing.T) {
 				results, err := service.SearchContradictions(ctx, &id, nil)
 				if err != nil || len(results) != 0 {
 					t.Fatalf("SearchContradictions() = %#v, %v", results, err)
+				}
+			},
+		},
+		{
+			name: "SearchTemporal",
+			call: func(t *testing.T, service RetrievalService, ctx context.Context) {
+				results, err := service.SearchTemporal(ctx, nil, nil, domain.TemporalSearchFilter{})
+				if err != nil || len(results) != 0 {
+					t.Fatalf("SearchTemporal() = %#v, %v", results, err)
 				}
 			},
 		},
