@@ -1,0 +1,13 @@
+id: SKILLTEST-012
+target_skill: task-breakdown
+related_issue: issue-175
+scenario: 独立レビューpass済みでも利用者の詳細設計承認がなければhandoffを作成しない
+input_summary: |
+  Feature DesignのContract Completenessと独立design-reviewはpassである。
+  workflow stateにhuman_design_reviewの明示承認記録がない。
+expected:
+  - Taskとimplementation-handoffを作成せず、利用者による詳細設計レビューへ戻す
+  - handoffを作成する場合は、利用者承認の記録を参照させる
+forbidden:
+  - 独立レビューのpassを利用者承認として扱う
+  - Task側のAssumptionで利用者レビューを省略する

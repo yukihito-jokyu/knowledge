@@ -1,0 +1,13 @@
+id: SKILLTEST-XXX
+target_skill: feature-design
+related_issue: ISSUE-XXX
+scenario: Brief scenario name
+input_summary: |
+  Describe the minimum context required to reproduce the behavior.
+expected:
+  - Expected behavior 1
+  - Expected behavior 2
+forbidden:
+  - Behavior that must not occur
+notes: |
+  Optional context or rationale.

@@ -1,0 +1,13 @@
+id: SKILLTEST-010
+target_skill: task-breakdown
+related_issue: issue-175
+scenario: 自己監査済みでも独立設計レビューがなければhandoffを作成しない
+input_summary: |
+  Feature DesignのContract Completenessはcompleteと記録されているが、design-review.mdがない。
+expected:
+  - Taskを作成せずdesign-reviewを要求する
+  - pass以外のレビュー結果ならfeature-designまたは人間Decisionへ差し戻す
+  - handoffにはpass済みdesign-review.mdを参照させる
+forbidden:
+  - 設計者の自己監査だけを独立レビューとして扱う
+  - Task側のAssumptionで未決定契約を補う

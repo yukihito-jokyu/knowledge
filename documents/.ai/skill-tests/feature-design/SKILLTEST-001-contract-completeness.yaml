@@ -1,0 +1,17 @@
+id: SKILLTEST-001
+target_skill: feature-design
+related_issue: issue-175
+scenario: 永続化CLIの論理契約を完了させる
+input_summary: |
+  SQLiteへEvidenceと履歴を保存し、JSON CLIで検索・更新するFeature。
+  既存設計には「Evidenceの重複検出は実装時に具体化する」とだけある。
+expected:
+  - 永続データ、CLI操作、検索、更新の重複・冪等性、Migration、Fixtureの契約を具体化する
+  - 分岐を含む更新処理のフローチャートとCLI・Store境界のシーケンス図の必要性を判断し、必要ならdesign.mdへ記載する
+  - 未確定のL3/L4事項はDecisionとして明示する
+forbidden:
+  - Evidence重複規則やJSON schemaを実装Taskへ委ねる
+  - 「インターフェース契約を選択した」だけで実際の入出力・エラーを省略する
+  - framework固有ではない論理データ契約までimplementation領域へ先送りする
+notes: |
+  詳細設計は技術非依存である一方、実装者が仕様を再設計しない粒度の論理契約を持つ必要がある。

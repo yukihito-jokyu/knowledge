@@ -1,0 +1,16 @@
+id: SKILLTEST-014
+target_skill: design-review
+related_issue: issue-175
+scenario: operation資料の可読性・バリデーション・図の欠落を検出する
+input_summary: |
+  JSON CLIのoperation資料にI/OとSQLはあるが、用語説明、コマンド概要、バリデーション設計がない。
+  SQLに処理コメントと文番号がなく、Mermaid図には未説明の英語ラベルと構文エラーがある。複数のSQL文は一つのSQLite Store矢印へまとめられ、not_foundとconflict、および複数SQLで起きるstorage_errorも一つの失敗分岐にまとめられている。
+expected:
+  - 資料間整合の監査でoperation資料の不足を記録し、return_to_feature_designを返す
+  - 正規契約の有無とは別に、利用者が確認可能な説明品質として不足を指摘する
+  - 複数SQL文とシーケンス図の矢印が一対一に対応しない不足を指摘する
+  - 異なる失敗結果と、同じerror codeでもSQL番号・rollback有無が異なる失敗が分岐ごとに区別されない不足を指摘する
+  - 設計資料を直接修正しない
+forbidden:
+  - I/OとSQLが存在するだけでpassにする
+  - 図やSQLの可読性不足を実装時の判断として見送る

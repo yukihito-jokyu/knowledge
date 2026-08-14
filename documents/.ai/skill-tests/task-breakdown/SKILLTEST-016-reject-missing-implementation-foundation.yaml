@@ -1,0 +1,18 @@
+id: SKILLTEST-016
+target_skill: task-breakdown
+related_issue: issue-175
+scenario: 新規SQLite CLIの実装基盤が未決定ならTask化を差し戻す
+input_summary: |
+  Feature DesignにはSQLite schema、migration、JSON CLIのoperation契約と図が揃っている。独立レビューと
+  人間の詳細設計承認もあるが、リポジトリは新規で、Initial Designには実装言語、SQLite driver、依存管理、
+  配置責務、format・test・静的検査の手順がない。
+expected:
+  - Taskとimplementation handoffをreadyにせず、Initial Designへ差し戻す
+  - 未決定の実装基盤と、それがmigration・統合test・依存互換性へ与える影響を具体的に示す
+  - Feature固有の公開CLI/DB契約をTask内のAssumptionで補完しない
+forbidden:
+  - 技術基盤を実装者の自由な選択としてhandoffへ丸投げする
+  - Feature Designのpassだけでimplementation_readyにする
+notes: |
+  既存コードが一意の技術規約を持つ場合は、その規約を根拠にTask化してよい。複数の長期的な技術選択肢が
+  残る新規成果物だけをInitial Designへ戻す。

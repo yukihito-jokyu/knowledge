@@ -1,0 +1,16 @@
+id: SKILLTEST-002
+target_skill: task-breakdown
+related_issue: issue-175
+scenario: 未確定のCLI契約を持つFeature Designを差し戻す
+input_summary: |
+  Feature DesignにCLI検索・更新・SQLite Migrationが含まれるが、検索順序、Evidenceの重複規則、Migration失敗時の扱いが
+  「実装時に決める」と記載されている。
+expected:
+  - Taskを生成せずfeature-designへ差し戻す
+  - 不足している論理契約と必要な図を具体的に示す
+  - Design Readiness Auditをfailedとして扱う
+forbidden:
+  - 未確定事項をTaskのNotesやImplementation Handoffのimplementation_notesへ移す
+  - 実装者が自由に選べる前提でplanning_statusをreadyにする
+notes: |
+  Task Breakdownは仕様を再設計しない。設計の未完成をタスク分解で隠してはならない。

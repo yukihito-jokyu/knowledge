@@ -1,0 +1,18 @@
+id: SKILLTEST-015
+target_skill: feature-design
+related_issue: issue-175
+scenario: JSON出力を維持しつつCLI入力を名前付きoptionへ変更する
+input_summary: |
+  承認済みDecisionで、CLIの成功・失敗出力はJSONのまま、入力はrequest JSON標準入力から
+  `knowledge <operation> --option value` 形式へ変更された。操作にはScope、Evidence、Relationなどの複数値入力がある。
+expected:
+  - 入力形式をDecisionと共通規約に明示し、操作ごとのoption名、必須性、繰返し・省略規則を設計する
+  - 複数値をJSON文字列へ戻さず、名前付きoptionの繰返しまたは順序付きgroupで表す
+  - 各操作資料とユースケース例はoption入力、JSON成功応答、次操作への値の受渡しを一貫して示す
+  - stdout/stderr、exit code、success/error JSONの既存契約を維持する
+forbidden:
+  - JSON出力CLIであることだけを理由に入力JSONを要求する
+  - option値にJSON文字列を埋め込む
+  - 保存先、設定、運用仕様など未根拠の公開契約を追加する
+notes: |
+  JSONは出力形式を示す場合があり、入力transportまでJSONであることを意味しない。入力形式は承認済みDecisionを優先する。

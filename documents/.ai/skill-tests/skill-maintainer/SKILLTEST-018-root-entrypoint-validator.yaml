@@ -1,0 +1,15 @@
+id: SKILLTEST-018
+target_skill: skill-maintainer
+related_issue: issue-175
+scenario: 実装リポジトリ直下から構造validatorを実行する
+input_summary: |
+  implementation skillとskill-maintainerはリポジトリ直下の`.agents/skills/`にあり、
+  Planning Skillとworkflow artifactは`documents/`配下にある。利用者は親リポジトリを
+  実装起点として、`.agents/skills/skill-maintainer/scripts/validate_skillset.py`を実行する。
+expected:
+  - "親リポジトリ直下からvalidatorがworkflow artifactと両方のskill rootを検出して成功する"
+  - "`documents/`から実行しても同じskill集合とworkflow artifactを検証できる"
+  - "documents側のsymlinkと親階層のskill本体を重複skillとして扱わない"
+forbidden:
+  - "カレントディレクトリ直下の`.ai/workflow`だけを前提に失敗する"
+  - "implementation skillまたはPlanning Skillのどちらかを検証対象から除外する"

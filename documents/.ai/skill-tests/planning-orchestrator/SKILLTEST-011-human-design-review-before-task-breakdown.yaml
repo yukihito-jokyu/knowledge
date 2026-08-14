@@ -1,0 +1,15 @@
+id: SKILLTEST-011
+target_skill: planning-orchestrator
+related_issue: issue-175
+scenario: 独立レビューpass後も利用者承認前にはTask Breakdownへ進ませない
+input_summary: |
+  Feature Designはcompletedで、freshなsubagentによるdesign-reviewはpassである。
+  しかし、利用者は詳細設計の資料をまだ確認しておらず、承認もしていない。
+expected:
+  - 詳細設計、補助資料、design-review.mdを利用者が確認できる機会を示す
+  - 利用者の明示承認がworkflow stateへ記録されるまでtask-breakdownへルーティングしない
+  - 利用者の修正指摘があればfeature-designへ戻し、必要に応じて独立レビューを再実行する
+forbidden:
+  - design-reviewのpassだけでTaskを作成する
+  - 沈黙または資料の閲覧を承認として扱う
+  - OrchestratorがFeature Designの成果物を直接修正する
