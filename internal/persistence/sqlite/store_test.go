@@ -19,6 +19,9 @@ import (
 const coverageDriverName = "sqlite-coverage-test"
 
 var coverageQuery func(string) (driver.Rows, error)
+var coverageExec func(string) error
+var coverageCommit func() error
+var coverageBegin func() error
 
 func init() {
 	sql.Register(coverageDriverName, coverageDriver{})
@@ -41,12 +44,20 @@ func (coverageConnection) Close() error {
 }
 
 func (coverageConnection) Begin() (driver.Tx, error) {
+	if coverageBegin != nil {
+		return nil, coverageBegin()
+	}
+
 	return coverageTransaction{}, nil
 }
 
 type coverageTransaction struct{}
 
 func (coverageTransaction) Commit() error {
+	if coverageCommit != nil {
+		return coverageCommit()
+	}
+
 	return nil
 }
 
@@ -56,6 +67,16 @@ func (coverageTransaction) Rollback() error {
 
 func (coverageConnection) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	return coverageQuery(query)
+}
+
+func (coverageConnection) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	if coverageExec != nil {
+		if err := coverageExec(query); err != nil {
+			return nil, err
+		}
+	}
+
+	return driver.RowsAffected(1), nil
 }
 
 type coverageRows struct {

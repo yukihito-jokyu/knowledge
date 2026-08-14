@@ -3,8 +3,10 @@ package sqlite
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +20,8 @@ import (
 	"github.com/yukihito-jokyu/knowledge/internal/domain"
 	_ "modernc.org/sqlite"
 )
+
+var readRandom = rand.Read
 
 const driverName = "sqlite"
 
@@ -53,6 +57,344 @@ var schemaObjects = []string{
 	"assertion_lexical_index",
 }
 
+const createConflictSQL = `
+SELECT a.assertion_id
+FROM assertions AS a
+JOIN assertion_revisions AS r
+  ON r.assertion_id = a.assertion_id AND r.revision = a.current_revision
+WHERE r.normalized_text = ?
+  AND NOT EXISTS (
+    SELECT 1 FROM json_each(?) AS requested
+    WHERE NOT EXISTS (
+      SELECT 1 FROM revision_scopes AS s
+      WHERE s.assertion_id = a.assertion_id AND s.revision = a.current_revision
+        AND s.scope_key = json_extract(requested.value, '$.key')
+        AND s.scope_value = json_extract(requested.value, '$.value')
+    )
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM revision_scopes AS s
+    WHERE s.assertion_id = a.assertion_id AND s.revision = a.current_revision
+      AND NOT EXISTS (
+        SELECT 1 FROM json_each(?) AS requested
+        WHERE json_extract(requested.value, '$.key') = s.scope_key
+          AND json_extract(requested.value, '$.value') = s.scope_value
+      )
+  )
+LIMIT 1
+`
+
+const createConceptTermSQL = `
+SELECT concept_id
+FROM concept_terms
+WHERE term = ?
+`
+
+const createAssertionTargetSQL = `
+SELECT 1 FROM assertions WHERE assertion_id = ?
+`
+
+const createConceptTargetSQL = `
+SELECT 1 FROM concepts WHERE concept_id = ?
+`
+
+const insertCreateAssertionSQL = `
+INSERT INTO assertions (assertion_id, current_revision, created_at)
+VALUES (?, 1, ?)
+`
+
+const insertCreateRevisionSQL = `
+INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at)
+VALUES (?, 1, ?, ?)
+`
+
+const insertCreateScopeSQL = `
+INSERT INTO revision_scopes (assertion_id, revision, scope_key, scope_value)
+VALUES (?, 1, ?, ?)
+`
+
+const insertCreateConceptSQL = `
+INSERT INTO concepts (concept_id, name, created_at)
+VALUES (?, ?, ?)
+`
+
+const insertCreateConceptTermSQL = `
+INSERT INTO concept_terms (term, concept_id, term_kind)
+VALUES (?, ?, ?)
+`
+
+const insertCreateConceptAliasSQL = `
+INSERT INTO concept_aliases (alias, concept_id)
+VALUES (?, ?)
+`
+
+const insertCreateAssertionConceptSQL = `
+INSERT INTO assertion_concepts (assertion_id, concept_id)
+VALUES (?, ?)
+`
+
+const insertCreateAssertionAliasSQL = `
+INSERT INTO assertion_aliases (assertion_id, alias_kind, alias_value)
+VALUES (?, ?, ?)
+`
+
+const insertCreateTemporalSQL = `
+INSERT INTO temporal_metadata (
+  assertion_id, revision, valid_from, valid_until, version_scope, observed_at, last_verified
+) VALUES (?, 1, ?, ?, ?, ?, ?)
+`
+
+const insertCreateEvidenceSQL = `
+INSERT INTO evidence (evidence_id, assertion_id, kind, raw_text, observed_at, created_at)
+VALUES (?, ?, ?, ?, ?, ?)
+`
+
+const insertCreateRelationSQL = `
+INSERT INTO relations (
+  relation_id, source_kind, source_id, relation_type, target_kind, target_id, created_at
+) VALUES (?, 'assertion', ?, ?, ?, ?, ?)
+`
+
+const insertCreateLexicalIndexSQL = `
+INSERT INTO assertion_lexical_index (
+  assertion_id, normalized_text, concept_name, concept_alias, scope_key, scope_value, assertion_alias
+)
+SELECT a.assertion_id, r.normalized_text,
+       COALESCE(group_concat(DISTINCT c.name), ''),
+       COALESCE(group_concat(DISTINCT ca.alias), ''),
+       COALESCE(group_concat(DISTINCT s.scope_key), ''),
+       COALESCE(group_concat(DISTINCT s.scope_value), ''),
+       COALESCE(group_concat(DISTINCT aa.alias_value), '')
+FROM assertions AS a
+JOIN assertion_revisions AS r ON r.assertion_id = a.assertion_id AND r.revision = a.current_revision
+LEFT JOIN assertion_concepts AS ac ON ac.assertion_id = a.assertion_id
+LEFT JOIN concepts AS c ON c.concept_id = ac.concept_id
+LEFT JOIN concept_aliases AS ca ON ca.concept_id = c.concept_id
+LEFT JOIN revision_scopes AS s ON s.assertion_id = r.assertion_id AND s.revision = r.revision
+LEFT JOIN assertion_aliases AS aa ON aa.assertion_id = a.assertion_id
+WHERE a.assertion_id = ?
+GROUP BY a.assertion_id
+`
+
+// CreateAssertion はAssertionと付随データ、派生字句Indexを一つのtransactionで作成する。
+func (s *Store) CreateAssertion(ctx context.Context, request domain.CreateRequest) (domain.CreateResult, error) {
+	transaction, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.CreateResult{}, fmt.Errorf("begin create assertion: %w", err)
+	}
+	defer func() { _ = transaction.Rollback() }()
+	if err := waitForIntegrationGate(ctx, "mutation"); err != nil {
+		return domain.CreateResult{}, err
+	}
+	scopeJSON, err := marshalScope(request.Scope)
+	if err != nil {
+		return domain.CreateResult{}, fmt.Errorf("marshal create scope: %w", err)
+	}
+	var conflict string
+	err = transaction.QueryRowContext(ctx, createConflictSQL, request.NormalizedText, string(scopeJSON), string(scopeJSON)).Scan(&conflict)
+	if err == nil {
+		return domain.CreateResult{}, domain.ErrCreateConflict
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return domain.CreateResult{}, fmt.Errorf("check create conflict: %w", err)
+	}
+	if err := verifyCreateRelationTargets(ctx, transaction, request.Relations); err != nil {
+		return domain.CreateResult{}, err
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	assertionID, err := createID("asrt_")
+	if err != nil {
+		return domain.CreateResult{}, err
+	}
+	if _, err := transaction.ExecContext(ctx, insertCreateAssertionSQL, assertionID, now); err != nil {
+		return domain.CreateResult{}, fmt.Errorf("insert assertion: %w", err)
+	}
+	if _, err := transaction.ExecContext(ctx, insertCreateRevisionSQL, assertionID, request.NormalizedText, now); err != nil {
+		return domain.CreateResult{}, fmt.Errorf("insert assertion revision: %w", err)
+	}
+	for _, scope := range request.Scope {
+		if _, err := transaction.ExecContext(ctx, insertCreateScopeSQL, assertionID, scope.Key, scope.Value); err != nil {
+			return domain.CreateResult{}, fmt.Errorf("insert scope: %w", err)
+		}
+	}
+	concepts, err := createConcepts(ctx, transaction, assertionID, request.Concepts, now)
+	if err != nil {
+		return domain.CreateResult{}, err
+	}
+	for _, alias := range request.Aliases {
+		if _, err := transaction.ExecContext(ctx, insertCreateAssertionAliasSQL, assertionID, alias.Kind, alias.Value); err != nil {
+			return domain.CreateResult{}, fmt.Errorf("insert assertion alias: %w", err)
+		}
+	}
+	if request.Temporal != nil {
+		if _, err := transaction.ExecContext(ctx, insertCreateTemporalSQL, assertionID, request.Temporal.ValidFrom, request.Temporal.ValidUntil, request.Temporal.VersionScope, request.Temporal.ObservedAt, request.Temporal.LastVerified); err != nil {
+			return domain.CreateResult{}, fmt.Errorf("insert temporal metadata: %w", err)
+		}
+	}
+	evidenceIDs, err := createEvidence(ctx, transaction, assertionID, request.Evidence, now)
+	if err != nil {
+		return domain.CreateResult{}, err
+	}
+	relationIDs, err := createRelations(ctx, transaction, assertionID, request.Relations, now)
+	if err != nil {
+		return domain.CreateResult{}, err
+	}
+	if _, err := transaction.ExecContext(ctx, insertCreateLexicalIndexSQL, assertionID); err != nil {
+		return domain.CreateResult{}, fmt.Errorf("insert lexical index: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return domain.CreateResult{}, err
+	}
+	if err := transaction.Commit(); err != nil {
+		return domain.CreateResult{}, fmt.Errorf("commit create assertion: %w", err)
+	}
+
+	return domain.CreateResult{
+		AssertionID: assertionID,
+		Revision:    1,
+		EvidenceIDs: evidenceIDs,
+		Concepts:    concepts,
+		RelationIDs: relationIDs,
+	}, nil
+}
+
+func verifyCreateRelationTargets(ctx context.Context, transaction *sql.Tx, relations []domain.CreateRelation) error {
+	for _, relation := range relations {
+		query := createAssertionTargetSQL
+		if relation.TargetKind == "concept" {
+			query = createConceptTargetSQL
+		}
+		var found int
+		if err := transaction.QueryRowContext(ctx, query, relation.TargetID).Scan(&found); errors.Is(err, sql.ErrNoRows) {
+			return domain.ErrCreateRelationTargetNotFound
+		} else if err != nil {
+			return fmt.Errorf("check relation target: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func createConcepts(ctx context.Context, transaction *sql.Tx, assertionID string, entries []domain.CreateConcept, now string) ([]domain.Concept, error) {
+	concepts := make([]domain.Concept, 0, len(entries))
+	for _, entry := range entries {
+		conceptID, err := resolveCreateConcept(ctx, transaction, entry, now)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := transaction.ExecContext(ctx, insertCreateAssertionConceptSQL, assertionID, conceptID); err != nil {
+			return nil, fmt.Errorf("insert assertion concept: %w", err)
+		}
+		concepts = append(concepts, domain.Concept{
+			ID:   conceptID,
+			Name: entry.Name,
+		})
+	}
+
+	return concepts, nil
+}
+
+func resolveCreateConcept(ctx context.Context, transaction *sql.Tx, entry domain.CreateConcept, now string) (string, error) {
+	terms := append([]string{entry.Name}, entry.Aliases...)
+	var existing string
+	known := make(map[string]bool, len(terms))
+	for _, term := range terms {
+		var conceptID string
+		err := transaction.QueryRowContext(ctx, createConceptTermSQL, term).Scan(&conceptID)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("resolve concept term: %w", err)
+		}
+		if existing != "" && existing != conceptID {
+			return "", domain.ErrCreateConflict
+		}
+		existing = conceptID
+		known[term] = true
+	}
+	if existing == "" {
+		var err error
+		existing, err = createID("cpt_")
+		if err != nil {
+			return "", err
+		}
+		if _, err := transaction.ExecContext(ctx, insertCreateConceptSQL, existing, entry.Name, now); err != nil {
+			return "", fmt.Errorf("insert concept: %w", err)
+		}
+	}
+	for index, term := range terms {
+		if known[term] {
+			continue
+		}
+		kind := "alias"
+		if index == 0 {
+			kind = "name"
+		}
+		if _, err := transaction.ExecContext(ctx, insertCreateConceptTermSQL, term, existing, kind); err != nil {
+			if isCreateConstraintError(err) {
+				return "", domain.ErrCreateConflict
+			}
+
+			return "", fmt.Errorf("insert concept term: %w", err)
+		}
+		if index > 0 {
+			if _, err := transaction.ExecContext(ctx, insertCreateConceptAliasSQL, term, existing); err != nil {
+				return "", fmt.Errorf("insert concept alias: %w", err)
+			}
+		}
+	}
+
+	return existing, nil
+}
+
+func isCreateConstraintError(err error) bool {
+	message := strings.ToLower(err.Error())
+
+	return strings.Contains(message, "constraint failed") || strings.Contains(message, "unique constraint")
+}
+
+func createEvidence(ctx context.Context, transaction *sql.Tx, assertionID string, entries []domain.CreateEvidence, now string) ([]string, error) {
+	ids := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		id, err := createID("evd_")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := transaction.ExecContext(ctx, insertCreateEvidenceSQL, id, assertionID, entry.Kind, entry.RawText, entry.ObservedAt, now); err != nil {
+			return nil, fmt.Errorf("insert evidence: %w", err)
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, nil
+}
+
+func createRelations(ctx context.Context, transaction *sql.Tx, assertionID string, entries []domain.CreateRelation, now string) ([]string, error) {
+	ids := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		id, err := createID("rel_")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := transaction.ExecContext(ctx, insertCreateRelationSQL, id, assertionID, entry.Type, entry.TargetKind, entry.TargetID, now); err != nil {
+			return nil, fmt.Errorf("insert relation: %w", err)
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, nil
+}
+
+func createID(prefix string) (string, error) {
+	bytes := make([]byte, 16)
+	if _, err := readRandom(bytes); err != nil {
+		return "", fmt.Errorf("generate identifier: %w", err)
+	}
+
+	return prefix + hex.EncodeToString(bytes), nil
+}
+
 var schemaIndexes = []string{
 	"idx_scopes_key_value",
 	"idx_evidence_assertion",
@@ -74,6 +416,11 @@ type Store struct {
 
 // OpenはSQLiteデータベースを開き、外部キーを有効化して埋込み移行を適用する。
 func Open(ctx context.Context, dsn string) (*Store, error) {
+	if strings.Contains(dsn, "?") {
+		dsn += "&_txlock=immediate"
+	} else {
+		dsn += "?_txlock=immediate"
+	}
 	db, err := openDatabase(driverName, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite store: %w", err)
