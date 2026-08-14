@@ -35,6 +35,18 @@ func (store retrievalStoreStub) GetEvidence(ctx context.Context, _ string) (doma
 	return domain.EvidenceResult{AssertionID: "asrt_01"}, nil
 }
 
+func (store retrievalStoreStub) SearchRelated(ctx context.Context, _ string, _ string, _ []string) ([]domain.RelatedResult, error) {
+	store.receive(ctx)
+
+	return []domain.RelatedResult{}, nil
+}
+
+func (store retrievalStoreStub) SearchContradictions(ctx context.Context, _ *string, _ *string) ([]domain.ContradictionResult, error) {
+	store.receive(ctx)
+
+	return []domain.ContradictionResult{}, nil
+}
+
 func (store retrievalStoreStub) receive(ctx context.Context) {
 	if store.receivedContext != nil {
 		*store.receivedContext = ctx
@@ -61,6 +73,25 @@ func TestRetrievalService(t *testing.T) {
 				result, err := service.SearchConcept(ctx, "channel")
 				if err != nil || result.Concept.ID != "cpt_01" {
 					t.Fatalf("SearchConcept() = %#v, %v", result, err)
+				}
+			},
+		},
+		{
+			name: "SearchRelated",
+			call: func(t *testing.T, service RetrievalService, ctx context.Context) {
+				results, err := service.SearchRelated(ctx, "assertion", "asrt_01", nil)
+				if err != nil || len(results) != 0 {
+					t.Fatalf("SearchRelated() = %#v, %v", results, err)
+				}
+			},
+		},
+		{
+			name: "SearchContradictions",
+			call: func(t *testing.T, service RetrievalService, ctx context.Context) {
+				id := "asrt_01"
+				results, err := service.SearchContradictions(ctx, &id, nil)
+				if err != nil || len(results) != 0 {
+					t.Fatalf("SearchContradictions() = %#v, %v", results, err)
 				}
 			},
 		},
