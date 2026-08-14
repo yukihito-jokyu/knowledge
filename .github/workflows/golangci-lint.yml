@@ -17,8 +17,10 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - name: 複合リテラルの配置を確認する
+        run: python3 .agents/skills/impl-knowledge-cli-implementation/scripts/check_composite_literal_layout.py
       - name: テストカバレッジを確認する
-        run: .agents/skills/impl-knowledge-cli/scripts/check_test_coverage.sh
+        run: python3 .agents/skills/impl-knowledge-cli-implementation/scripts/check_test_coverage.py
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.11
