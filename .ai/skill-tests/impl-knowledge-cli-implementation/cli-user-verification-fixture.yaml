@@ -1,5 +1,5 @@
-id: impl-knowledge-cli-cli-user-verification-fixture
-target_skill: impl-knowledge-cli
+id: impl-knowledge-cli-implementation-cli-user-verification-fixture
+target_skill: impl-knowledge-cli-implementation
 scenario: 利用者が確認すべきKnowledge CLIコマンドを洗い出し、自動検証できるようにする実装依頼。
 input_summary: 全操作の利用者確認コマンドを可視化し、Taskfileの扱いをユーザー指定に従いながら、実バイナリのstdout、stderr、exit codeを自動検証したい。
 expected:

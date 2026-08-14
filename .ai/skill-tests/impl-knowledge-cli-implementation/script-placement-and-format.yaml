@@ -1,0 +1,17 @@
+id: impl-knowledge-cli-implementation-script-placement-and-format
+target_skill: impl-knowledge-cli-implementation
+scenario: Knowledge CLI実装で再利用する品質検査scriptと一時的なmigration補助scriptを追加しようとしている。
+input_summary: scriptの拡張子と配置を統一し、責務のないrepository rootや別Skillへ補助fileを置かずに実装を完了したい。
+expected:
+  - 追加・移動fileごとにowner、呼出元、実行時期、配置理由を実装前に決める。
+  - 工程同一性scriptはオーケストレーター、実装品質gateは実装Skill、product codeとtest fixtureは既存の責務directoryへ置く。
+  - Skill補助scriptはPythonへ統一し、python3による明示的な実行commandを使う。
+  - 一回限りのmigration補助scriptはtemporary directoryで実行しcandidateへ残さない。
+  - 最終candidateで孤立script、責務重複、rootへの仮置き、異なる拡張子のhelperがないことを確認してImplementation Reportへ配置matrixを含める。
+  - CI、Taskfile、Skill本文を含む全callerを新しい配置と実行commandへ同時に更新する。
+forbidden:
+  - 置き場所が分からないscriptをrepository rootや汎用utilsへ仮置きする。
+  - 同じ品質検査をTaskfile、shell、Pythonへ重複実装する。
+  - scriptだけを移動し、CIを削除済みpathへ向けたままにする。
+  - 配置根拠を確認せずREADY_FOR_REVIEWを返す。
+related_issue: '#181'
