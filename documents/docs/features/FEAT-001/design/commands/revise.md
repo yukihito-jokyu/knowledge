@@ -56,7 +56,7 @@ knowledge revise --assertion-id asrt_01 \
 | `--assertion-id` | 必須の空でない文字列 | `validation_error` |
 | `--normalized-text` | 必須。trim 後に空でない文字列 | `validation_error` |
 | Scope group | 省略時は空。指定時は `--scope-key` と `--scope-value` を対にし、同じkeyを重複させない | `validation_error` |
-| 時点option | 省略時は `temporal: null`。指定する時刻はRFC 3339 UTCで、`--valid-from` と `--valid-until` が両方ある場合は前者が後者以下 | `validation_error` |
+| 時点option | 省略時は `temporal: null`。指定する時刻をRFC 3339 UTCとして解析し固定幅UTCへ正規化する。`--valid-from` と `--valid-until` が両方ある場合は前者が後者以下 | `validation_error` |
 | 参照先 Assertion | `--assertion-id` が保存済み Assertion を指す | `not_found` |
 | revision の重複 | 本文・Scope・時点情報が現行 revision とすべて同じでない | `conflict` |
 

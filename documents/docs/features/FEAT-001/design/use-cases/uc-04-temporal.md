@@ -6,7 +6,7 @@
 
 | 順序 | 操作 | 使い方 | 次の判断材料 |
 | --- | --- | --- | --- |
-| 1 | [`search-temporal`](../commands/search-temporal.md) | Concept または Scope を指定して、時点情報を持つ現行 Assertion を調べる。 | 時点情報を持つ候補。 |
+| 1 | [`search-temporal`](../commands/search-temporal.md) | Concept または Scope を指定し、必要に応じて時点または有効期間で、時点情報を持つ現行 Assertion を調べる。 | 時点情報を持つ候補。 |
 | 2 | [`get`](../commands/get.md) | 確認する候補の Assertion ID を指定する。 | 本文、Scope、Temporal Metadata。 |
 | 3 | [`get-evidence`](../commands/get-evidence.md) | 必要な候補の根拠を取得する。 | Evidence 履歴。 |
 
@@ -20,7 +20,8 @@
 
 ```text
 knowledge search-temporal --concept channel \
-  --scope-key language --scope-value Go
+  --scope-key language --scope-value Go \
+  --at 2026-08-14T00:00:00Z
 ```
 
 標準出力:

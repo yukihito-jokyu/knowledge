@@ -110,11 +110,12 @@
 - **目的:** 保存済みTemporal Metadataと現行Assertionを、指定した時点・有効期間・Scopeで決定論的に検索できるようにする。
 - **関連要件:** REQ-009、REQ-012、REQ-014、BR-010、CON-004、CON-005。
 - **論理領域:** retrieval。
-- **作業内容:** `search-temporal` のoption、RFC 3339 UTC時刻、Scope集合照合、現行AssertionとTemporal Metadataの応答を設計どおりに実現する。
+- **作業内容:** `search-temporal` のoption、RFC 3339 UTC時刻、Scope集合照合、現行AssertionとTemporal Metadataの応答を設計どおりに実現する。既存StoreのTemporal Metadataを固定幅UTCへ正規化するschema v2 migrationも実現する。
 - **受入条件:**
-  - 指定時点または有効期間に合致する保存済みTemporal Metadataを持つ現行Assertionだけを返す。
+  - 指定時点を有効期間が包含する、または指定有効期間と保存済み有効期間が重複する、Temporal Metadataを持つ現行Assertionだけを返す。片側`null`は開放境界、両側`null`は時点条件がある照会では不一致とする。
   - 指定Scopeがある場合は設計したScope集合照合に従い、未指定の場合はScopeで絞り込まない。
-  - 不正な時刻・空文字・不完全なScope groupは`validation_error`となり、該当データがなければ成功の空配列となる。
+  - 小数秒ありを含むRFC 3339 UTC時刻は固定幅UTCへ正規化して照合する。不正な時刻・`--at`と検索有効期間の同時指定・逆順の検索有効期間・空文字・不完全なScope groupは`validation_error`となり、該当データがなければ成功の空配列となる。
+  - schema v1の既存Storeは、`temporal_metadata`の全非null時刻をschema v2で正規化した後に照会する。時刻解析・正規化後の有効期間順序・更新・version記録の失敗は全件rollbackして`storage_error`とし、再実行で部分更新を残さない。
   - 検索はTemporal Metadata以外から時点差分や古さを推論せず、Storeを書き換えない。
 - **依存:** TASK-001-01、TASK-001-02。
 - **対象外／注記:** `outdated`等の知識状態判定は対象外。正規契約は [search-temporal.md](design/commands/search-temporal.md)。

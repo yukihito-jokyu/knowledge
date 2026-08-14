@@ -56,7 +56,7 @@ CLI は結果から `known`、`no_evidence`、矛盾の意味、同一性、置�
 
 - `assertion_id`、`concept_id`、`evidence_id`、`relation_id` は CLI が生成する不透明な文字列であり、利用者は意味を解釈しない。
 - `scope` は `key` と `value` から成る配列である。同一 assertion revision 内で `key` は一意とする。`aliases` は Assertion に付与する `api_name` または `identifier` の配列であり、現行 Assertion 内で同じ `kind` と `value` を重複させない。
-- `temporal` は任意。`valid_from`、`valid_until`、`version_scope`、`observed_at`、`last_verified` を保持でき、時刻は RFC 3339 UTC、未設定は `null` とする。
+- `temporal` は任意。`valid_from`、`valid_until`、`version_scope`、`observed_at`、`last_verified` を保持でき、時刻はRFC 3339 UTC入力を固定幅 `YYYY-MM-DDTHH:mm:ss.fffffffffZ` へ正規化して保持・出力し、未設定は `null` とする。
 - Evidence は `raw_text` と `kind` を必須とする。`kind` は Issue #175 の根拠例を機械的に区別する enum であり、値は command 資料に従う。
 - optionの未知名、値不足、単一値optionの重複、複数値グループの不完全な並びは `validation_error` とする。JSON出力の省略可能 field は `null` と区別し、配列は空配列で表す。
 
@@ -164,5 +164,6 @@ Store はローカル専用 SQLite、CLI が唯一のアクセス経路である
 - **DEC-FEAT-004 (L3, decided):** `search-contradictions` の結果は `seed` と常にその相手である `target` を返し、保存方向は `direction` で保持する。矛盾候補を `get` / `get-evidence` へ安全に受け渡すため、`contradicts` Relation は Assertion 間に限定する。
 - **DEC-FEAT-005 (L3, decided):** 通常ビルドは `os.UserConfigDir()/knowledge/knowledge.db` を既定Storeとして初期化する。保存先の選択、設定、運用責任を追加しない。
 - **DEC-FEAT-006 (L3, decided):** 最初の`Ctrl-C`は要求Contextをcancelし、success／error JSONおよびstdout／stderrを出さず終了コード130で終了する。
+- **DEC-FEAT-007 (L3, decided):** `search-temporal` は任意のRFC 3339 UTC時点または閉区間で、保存済み有効期間を機械的に照合する。時点は包含、期間は重複で一致し、片側`null`は開放境界、両側`null`は時点条件がある照会では不一致とする。時刻は固定幅UTCへ正規化し、SQLiteのTEXT比較を時系列比較として用いる。
 - **L2:** SQLite schema v1 の table／column／Index 名は、承認済み JSON 契約を満たす内部表現である。
 - **既決:** Semantic Search は FEAT-006 まで延期する。

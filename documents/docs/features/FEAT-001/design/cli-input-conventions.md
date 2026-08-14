@@ -35,7 +35,9 @@ knowledge <operation> --<option> <value>
 
 ## 時点情報
 
-`--valid-from`、`--valid-until`、`--version-scope`、`--observed-at`、`--last-verified` のいずれかを指定すると時点情報を作る。指定しない時点fieldは `null` である。これらを一つも指定しなければ、時点情報は `null` である。各optionは一度だけ指定できる。
+`--valid-from`、`--valid-until`、`--version-scope`、`--observed-at`、`--last-verified` のいずれかを指定すると時点情報を作る。指定しない時点fieldは `null` である。これらを一つも指定しなければ、時点情報は `null` である。各optionは一度だけ指定できる。時点情報の時刻値はRFC 3339 UTCとして解析し、保存・出力前に固定幅 `YYYY-MM-DDTHH:mm:ss.fffffffffZ` へ正規化する。
+
+`search-temporal` だけは、保存する時点情報とは別に検索条件として `--at`、または `--valid-from` と `--valid-until` の組を指定できる。各値はRFC 3339 UTCとして解析・固定幅UTCへ正規化し、`--at` と検索有効期間は同時に指定しない。検索有効期間の開始は終了以下とする。照合の意味は [search-temporal](commands/search-temporal.md) に従う。
 
 ## 仮定と範囲
 

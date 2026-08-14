@@ -1,4 +1,4 @@
-# FEAT-001 Database Schema Reference（SQLite v1）
+# FEAT-001 Database Schema Reference（SQLite）
 
 > DEC-FEAT-002 により人間承認済み。これはローカル SQLite 内の論理 schema と migration 契約だけを定める。通常ビルドの既定保存先は [DEC-FEAT-005](../decisions/DEC-FEAT-005.md) が定める。
 
@@ -7,10 +7,11 @@
 | Version | 依存 | 前提 | 適用内容 | 成功後 | 失敗・中断 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | なし | 対象DBに application schema が未初期化 | 下記全table・Indexを単一 transaction で作成 | `schema_migrations` に version 1 を1件記録 | transaction rollback。再実行可能。 |
+| 2 | 1 | version 1 が適用済み | `temporal_metadata` の全非null時刻を固定幅UTCへ正規化 | `schema_migrations` に version 2 を1件記録 | 時刻解析・順序検査・更新・記録のいずれかが失敗したら transaction rollback。version 2を記録しない。 |
 
-同一 version が適用済みなら何も変更せず成功する。将来 migration は連番で、既存 Assertion ID、Evidence、Relation、履歴を破壊せずに追加する。Semantic Index は FEAT-006 が正規 table から構築し、v1 には持たない。
+同一 version が適用済みなら何も変更せず成功する。空Storeにはversion 1、続けてversion 2を適用する。将来 migration は連番で、既存 Assertion ID、Evidence、Relation、履歴を破壊せずに追加する。Semantic Index は FEAT-006 が正規 table から構築し、v1 には持たない。
 
-適用手順は次のとおりである。まず SQLite 組込みの `sqlite_schema` を読み、FEAT-001 が所有する table / virtual table の存在を検査する。いずれも存在しない空 Store だけが未初期化であり、下記DDLと version記録を単一 transaction で実行する。`schema_migrations` を含む一部だけが存在する、または `schema_migrations` があって version 1 以外・不整合な履歴を持つ状態は `storage_error` とする。全schemaが存在し version 1 が記録済みなら DDL を実行せず成功する。DDLまたは記録のいずれかが失敗したら rollback し、version 1 は記録しない。
+適用手順は次のとおりである。まず SQLite 組込みの `sqlite_schema` を読み、FEAT-001 が所有する table / virtual table の存在を検査する。いずれも存在しない空 Store だけが未初期化であり、下記DDLとversion 1記録を単一 transaction で実行した後、version 2を適用する。`schema_migrations` を含む一部だけが存在する、または連番でない・不整合な履歴を持つ状態は `storage_error` とする。全schemaが存在しversion 1だけが記録済みならversion 2を適用し、version 1と2が記録済みなら何も変更せず成功する。各migrationのDDL・変換・記録のいずれかが失敗したら当該transactionをrollbackし、そのversionは記録しない。
 
 ```sql
 SELECT name
@@ -57,7 +58,7 @@ Schema の適用済み version を記録する。
 
 | 列 | SQLite型 | NULL | Key / 制約 | 説明 |
 | --- | --- | --- | --- | --- |
-| `version` | INTEGER | 不可 | PRIMARY KEY | 適用済み migration の連番。v1 は `1`。 |
+| `version` | INTEGER | 不可 | PRIMARY KEY | 適用済み migration の連番。初期schemaは `1`、時刻正規化は `2`。 |
 | `applied_at` | TEXT | 不可 |  | 適用完了時刻。 |
 
 ### `assertions`
@@ -161,11 +162,11 @@ Assertion revision に任意で一対一に対応する時点・有効期間情�
 | --- | --- | --- | --- | --- |
 | `assertion_id` | TEXT | 不可 | 複合PRIMARY KEY、複合FK → `assertion_revisions` | 対象 Assertion。 |
 | `revision` | INTEGER | 不可 | 複合PRIMARY KEY、複合FK → `assertion_revisions` | 対象 revision。 |
-| `valid_from` | TEXT | 可 | `valid_until` 以下（両方指定時） | 有効期間の開始。 |
-| `valid_until` | TEXT | 可 | `valid_from` 以上（両方指定時） | 有効期間の終了。 |
+| `valid_from` | TEXT | 可 | 固定幅UTC。`valid_until` 以下（両方指定時） | 有効期間の開始。 |
+| `valid_until` | TEXT | 可 | 固定幅UTC。`valid_from` 以上（両方指定時） | 有効期間の終了。 |
 | `version_scope` | TEXT | 可 |  | 対象バージョンの範囲。 |
-| `observed_at` | TEXT | 可 |  | 観測時刻。 |
-| `last_verified` | TEXT | 可 |  | 最終検証時刻。 |
+| `observed_at` | TEXT | 可 | 固定幅UTC | 観測時刻。 |
+| `last_verified` | TEXT | 可 | 固定幅UTC | 最終検証時刻。 |
 
 ### `relations`
 
@@ -209,7 +210,7 @@ endpoint の実在は種別ごとの table を横断するため、CLI が mutat
 | `idx_assertion_aliases_value` | `assertion_aliases(alias_value, assertion_id)` | Assertion Alias による検索。 |
 | `idx_relations_source` | `relations(source_kind, source_id, relation_type)` | 保存上の source endpoint からの Relation 検索。 |
 | `idx_relations_target` | `relations(target_kind, target_id, relation_type)` | 保存上の target endpoint からの Relation 検索。 |
-| `idx_temporal_window` | `temporal_metadata(valid_from, valid_until)` | 時点・有効期間による検索。 |
+| `idx_temporal_window` | `temporal_metadata(valid_from, valid_until)` | `search-temporal` の指定時点の包含および指定有効期間との重複による検索。 |
 
 ## DDL
 
@@ -354,6 +355,22 @@ INSERT INTO schema_migrations (version, applied_at)
 VALUES (1, :applied_at);
 COMMIT;
 ```
+
+### Migration 2: Temporal Metadata の時刻正規化
+
+version 1だけが適用済みのStoreでは、SQLiteの時刻関数や文字列操作を使わず、SQLite adapterに登録したversion 2のGo migration handlerが各値をRFC 3339として解析する。これは可変長小数秒を精度を失わず固定幅化するためであり、[architecture](../../../design/architecture.md#go-module-と配置規約) が許す内部migration handlerである。対象は`temporal_metadata`の`valid_from`、`valid_until`、`observed_at`、`last_verified`の全非null値である。解析した値をUTCの固定幅 `YYYY-MM-DDTHH:mm:ss.fffffffffZ`へ変換する。`valid_from`と`valid_until`が両方ある行は、変換後に開始が終了以下であることも検査する。
+
+```text
+BEGIN IMMEDIATE
+  temporal_metadata の全行を読む
+  各非null時刻を RFC 3339 として解析し、固定幅UTCへ変換する
+  各 valid_from / valid_until の順序を検査する
+  変換後の4列を各行へ更新する
+  schema_migrations へ version 2 を記録する
+COMMIT
+```
+
+解析不能な時刻、変換後に逆順となる有効期間、更新失敗、またはversion記録失敗ではrollbackし、`storage_error`とする。いずれの場合も更新済み行・version 2記録を残さない。version 2が適用済みなら更新せず成功する。これにより、migration前に小数秒の桁数が異なるRFC 3339値を持つStoreも、migration後は`search-temporal`のTEXT比較と時系列比較が一致し、返却時刻も固定幅UTCになる。
 
 ## Schema Notes
 
