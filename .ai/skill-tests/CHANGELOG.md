@@ -2,6 +2,7 @@
 
 ## 2026-08-14
 
+- `impl-knowledge-cli`: 完了報告前に対象Issueの受入条件を実施・検証状況へ更新する手順と回帰scenarioを追加。未検証項目を完了扱いしない規約を明確化。
 - `impl-knowledge-cli`: 利用者確認コマンドの棚卸しを、`testdata/fixtures`の期待I/Oと`test/integration`の実バイナリ検証へ対応付ける手順を追加。Taskfileを期待結果の正本にしない規約と回帰scenarioを追加。
 - `impl-knowledge-cli`: Goおよびmigration SQLの説明コメントを日本語で端的に書く規約を、英語の説明語を残さない形へ明確化。複数要素の配列・sliceリテラルを1要素1行にする規約と回帰scenarioを追加。
 - `impl-knowledge-cli`: テーブル駆動unit testとstatement coverage 100%をSkillスクリプトで強制する規約を追加。回帰scenarioに検査失敗条件を追加。

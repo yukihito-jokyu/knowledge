@@ -80,6 +80,7 @@ description: Knowledge CLIのGo実装におけるCLI境界、application/domain/
    - 未実装の後続操作で成功結果を検証できない場合は、そのケースの現時点の期待結果と、成功契約を検証する後続Taskを明確に分ける。
 5. migrationは初回適用、再実行、失敗時rollbackを確認する。mutationはcommit後だけ成功responseを返し、失敗時は部分更新を残さない。
 6. 検証を実行し、設計との不一致はPlanning成果物を勝手に変えず報告する。
+7. 完了報告の前に、対象Issueの受入条件を実施結果へ更新する。検証済みの項目だけを完了にし、未対応または未検証の項目は未完了のまま理由をIssueへ記録する。
 
 ## Validation
 
@@ -97,3 +98,4 @@ description: Knowledge CLIのGo実装におけるCLI境界、application/domain/
 - migration、transaction、公開I/Oを該当するtestで検証する。
 - 利用者確認コマンドを求められた場合、fixtureとprocess境界testが引数、stdout、stderr JSON、exit codeを対応付けている。
 - 未承認の公開契約またはArchitecture/Product Decisionを導入しない。
+- 完了報告前に、対象Issueの受入条件が実際の対応状況と一致している。
