@@ -1,0 +1,123 @@
+{
+  "cases": [
+    {
+      "name": "search-text の最小入力",
+      "arguments": ["search-text", "--query", "channel"],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+    },
+    {
+      "name": "search-concept の最小入力",
+      "arguments": ["search-concept", "--concept", "channel"],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+    },
+    {
+      "name": "search-related の最小入力",
+      "arguments": ["search-related", "--seed-kind", "assertion", "--seed-id", "asrt_01"],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+    },
+    {
+      "name": "get の最小入力",
+      "arguments": ["get", "--assertion-id", "asrt_01"],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+    },
+    {
+      "name": "get-evidence の最小入力",
+      "arguments": ["get-evidence", "--assertion-id", "asrt_01"],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+    },
+    {
+      "name": "search-contradictions の最小入力",
+      "arguments": ["search-contradictions", "--assertion-id", "asrt_01"],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+    },
+    {
+      "name": "search-temporal の最小入力",
+      "arguments": ["search-temporal", "--concept", "channel"],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+    },
+    {
+      "name": "create の最小入力",
+      "arguments": ["create", "--normalized-text", "channel", "--evidence-kind", "user_code", "--evidence-text", "evidence", "--evidence-observed-at", "2026-08-14T00:00:00Z"],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+    },
+    {
+      "name": "attach-evidence の最小入力",
+      "arguments": ["attach-evidence", "--assertion-id", "asrt_01", "--evidence-kind", "user_code", "--evidence-text", "evidence", "--evidence-observed-at", "2026-08-14T00:00:00Z"],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+    },
+    {
+      "name": "revise の最小入力",
+      "arguments": ["revise", "--assertion-id", "asrt_01", "--normalized-text", "channel"],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+    },
+    {
+      "name": "supersede の最小入力",
+      "arguments": ["supersede", "--superseded-assertion-id", "asrt_01", "--replacement-assertion-id", "asrt_02"],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+    },
+    {
+      "name": "必須option不足",
+      "arguments": ["get"],
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "validation_error", "message": "assertion-id: 必須optionを指定してください", "field": "assertion-id"}}
+    },
+    {
+      "name": "未知option",
+      "arguments": ["search-text", "--unknown", "value"],
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "validation_error", "message": "unknown: この操作では使えないoptionです", "field": "unknown"}}
+    },
+    {
+      "name": "単一値optionの重複",
+      "arguments": ["get", "--assertion-id", "one", "--assertion-id", "two"],
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "validation_error", "message": "assertion-id: 単一値optionを重複指定できません", "field": "assertion-id"}}
+    },
+    {
+      "name": "Concept group不完全",
+      "arguments": ["create", "--normalized-text", "text", "--concept-alias", "channel", "--evidence-kind", "user_code", "--evidence-text", "evidence", "--evidence-observed-at", "2026-08-14T00:00:00Z"],
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "validation_error", "message": "concept-alias: ConceptなしにAliasを指定できません", "field": "concept-alias"}}
+    },
+    {
+      "name": "Evidence enum不正",
+      "arguments": ["attach-evidence", "--assertion-id", "one", "--evidence-kind", "unknown", "--evidence-text", "evidence", "--evidence-observed-at", "2026-08-14T00:00:00Z"],
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "validation_error", "message": "evidence-kind: 許可されていないEvidence種別です", "field": "evidence-kind"}}
+    },
+    {
+      "name": "自己置換の競合",
+      "arguments": ["supersede", "--superseded-assertion-id", "one", "--replacement-assertion-id", "one"],
+      "exit_code": 4,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "conflict", "message": "同じAssertionを置換できません", "field": "replacement-assertion-id"}}
+    }
+  ]
+}
