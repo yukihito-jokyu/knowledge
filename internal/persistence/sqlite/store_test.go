@@ -301,6 +301,284 @@ func TestOpenHandlesDatabaseOpenFailure(t *testing.T) {
 	}
 }
 
+func TestRelationSearches(t *testing.T) {
+	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "relations.db"))
+	if err != nil {
+		t.Fatalf("Storeを開く: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	_, err = store.db.ExecContext(context.Background(), `
+INSERT INTO assertions (assertion_id, current_revision, created_at) VALUES ('asrt_01', 1, 'now'), ('asrt_02', 1, 'now');
+INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at) VALUES ('asrt_01', 1, 'first', 'now'), ('asrt_02', 1, 'second', 'now');
+INSERT INTO concepts (concept_id, name, created_at) VALUES ('cpt_01', 'channel', 'now');
+INSERT INTO concept_aliases (alias, concept_id) VALUES ('chan', 'cpt_01');
+INSERT INTO assertion_concepts (assertion_id, concept_id) VALUES ('asrt_01', 'cpt_01'), ('asrt_02', 'cpt_01');
+INSERT INTO relations (relation_id, source_kind, source_id, relation_type, target_kind, target_id, created_at) VALUES
+  ('rel_01', 'assertion', 'asrt_01', 'causes', 'assertion', 'asrt_02', 'now'),
+  ('rel_02', 'assertion', 'asrt_01', 'contradicts', 'assertion', 'asrt_02', 'now'),
+  ('rel_03', 'concept', 'cpt_01', 'related_to', 'assertion', 'asrt_01', 'now');
+`)
+	if err != nil {
+		t.Fatalf("Relation検索用データを作る: %v", err)
+	}
+	tests := []struct {
+		name       string
+		call       func() (any, error)
+		wantCount  int
+		wantTarget string
+		wantError  error
+	}{
+		{
+			name: "Assertion起点は両方向の相手を返す",
+			call: func() (any, error) {
+				return store.SearchRelated(context.Background(), "assertion", "asrt_02", nil)
+			},
+			wantCount:  2,
+			wantTarget: "asrt_01",
+		},
+		{
+			name: "Relation種別で絞り込む",
+			call: func() (any, error) {
+				return store.SearchRelated(context.Background(), "assertion", "asrt_01", []string{"causes"})
+			},
+			wantCount:  1,
+			wantTarget: "asrt_02",
+		},
+		{
+			name: "Concept起点の相手を返す",
+			call: func() (any, error) {
+				return store.SearchRelated(context.Background(), "concept", "cpt_01", nil)
+			},
+			wantCount:  1,
+			wantTarget: "asrt_01",
+		},
+		{
+			name: "不存在の検索起点",
+			call: func() (any, error) {
+				return store.SearchRelated(context.Background(), "assertion", "missing", nil)
+			},
+			wantError: domain.ErrRelationSeedNotFound,
+		},
+		{
+			name: "Assertion selectorの矛盾候補",
+			call: func() (any, error) {
+				id := "asrt_02"
+
+				return store.SearchContradictions(context.Background(), &id, nil)
+			},
+			wantCount:  1,
+			wantTarget: "asrt_01",
+		},
+		{
+			name: "Concept selectorは両端を別seedとして返す",
+			call: func() (any, error) {
+				concept := "chan"
+
+				return store.SearchContradictions(context.Background(), nil, &concept)
+			},
+			wantCount: 2,
+		},
+		{
+			name: "未登録selectorは空結果",
+			call: func() (any, error) {
+				concept := "missing"
+
+				return store.SearchContradictions(context.Background(), nil, &concept)
+			},
+			wantCount: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.call()
+			if !errors.Is(err, tt.wantError) {
+				t.Fatalf("検索error = %v, want %v", err, tt.wantError)
+			}
+			if err != nil {
+				return
+			}
+			switch values := got.(type) {
+			case []domain.RelatedResult:
+				if len(values) != tt.wantCount {
+					t.Fatalf("結果数 = %d, want %d", len(values), tt.wantCount)
+				}
+				if tt.wantTarget != "" && values[0].Target.ID != tt.wantTarget {
+					t.Fatalf("target = %q, want %q", values[0].Target.ID, tt.wantTarget)
+				}
+			case []domain.ContradictionResult:
+				if len(values) != tt.wantCount {
+					t.Fatalf("結果数 = %d, want %d", len(values), tt.wantCount)
+				}
+				if tt.wantTarget != "" && values[0].Target.ID != tt.wantTarget {
+					t.Fatalf("target = %q, want %q", values[0].Target.ID, tt.wantTarget)
+				}
+			}
+		})
+	}
+	concept := "chan"
+	contradictions, err := store.SearchContradictions(context.Background(), nil, &concept)
+	if err != nil {
+		t.Fatalf("Concept selectorの矛盾候補を検索: %v", err)
+	}
+	wantContradictions := []domain.ContradictionResult{
+		{
+			RelationID: "rel_02",
+			Direction:  "outgoing",
+			SeedID:     "asrt_01",
+			Target: domain.RelationTarget{
+				Kind: "assertion",
+				ID:   "asrt_02",
+			},
+		},
+		{
+			RelationID: "rel_02",
+			Direction:  "incoming",
+			SeedID:     "asrt_02",
+			Target: domain.RelationTarget{
+				Kind: "assertion",
+				ID:   "asrt_01",
+			},
+		},
+	}
+	if len(contradictions) != len(wantContradictions) {
+		t.Fatalf("Concept selectorの矛盾候補数 = %d, want %d", len(contradictions), len(wantContradictions))
+	}
+	for index, want := range wantContradictions {
+		got := contradictions[index]
+		if got.RelationID != want.RelationID || got.Direction != want.Direction || got.SeedID != want.SeedID || got.Target.Kind != want.Target.Kind || got.Target.ID != want.Target.ID {
+			t.Fatalf("Concept selectorの矛盾候補[%d] = %+v, want %+v", index, got, want)
+		}
+	}
+}
+
+func TestRelationSearchHandlesReadFailures(t *testing.T) {
+	tests := []struct {
+		name    string
+		call    func(*Store) error
+		handler func(string) (driver.Rows, error)
+	}{
+		{
+			name: "検索起点確認の失敗",
+			call: func(store *Store) error {
+				_, err := store.SearchRelated(context.Background(), "assertion", "asrt_01", nil)
+
+				return err
+			},
+			handler: func(string) (driver.Rows, error) { return nil, errors.New("seed failure") },
+		},
+		{
+			name: "Relation照会の失敗",
+			call: func(store *Store) error {
+				_, err := store.SearchRelated(context.Background(), "assertion", "asrt_01", nil)
+
+				return err
+			},
+			handler: func(query string) (driver.Rows, error) {
+				if strings.Contains(query, "WHERE assertion_id") {
+					return &coverageRows{
+						columns: []string{"value"},
+						values:  [][]driver.Value{{1}},
+					}, nil
+				}
+
+				return nil, errors.New("relation failure")
+			},
+		},
+		{
+			name: "Relation行の読込失敗",
+			call: func(store *Store) error {
+				_, err := store.SearchRelated(context.Background(), "assertion", "asrt_01", nil)
+
+				return err
+			},
+			handler: func(query string) (driver.Rows, error) {
+				if strings.Contains(query, "WHERE assertion_id") {
+					return &coverageRows{
+						columns: []string{"value"},
+						values:  [][]driver.Value{{1}},
+					}, nil
+				}
+
+				return &coverageRows{
+					columns: []string{"relation_id"},
+					values:  [][]driver.Value{{nil}},
+				}, nil
+			},
+		},
+		{
+			name: "Relation行の走査失敗",
+			call: func(store *Store) error {
+				_, err := store.SearchRelated(context.Background(), "assertion", "asrt_01", nil)
+
+				return err
+			},
+			handler: func(query string) (driver.Rows, error) {
+				if strings.Contains(query, "WHERE assertion_id") {
+					return &coverageRows{
+						columns: []string{"value"},
+						values:  [][]driver.Value{{1}},
+					}, nil
+				}
+
+				return &coverageRows{
+					columns: []string{"relation_id"},
+					err:     errors.New("relation rows failure"),
+				}, nil
+			},
+		},
+		{
+			name: "矛盾候補照会の失敗",
+			call: func(store *Store) error {
+				_, err := store.SearchContradictions(context.Background(), nil, nil)
+
+				return err
+			},
+			handler: func(string) (driver.Rows, error) { return nil, errors.New("contradiction failure") },
+		},
+		{
+			name: "矛盾候補行の読込失敗",
+			call: func(store *Store) error {
+				_, err := store.SearchContradictions(context.Background(), nil, nil)
+
+				return err
+			},
+			handler: func(string) (driver.Rows, error) {
+				return &coverageRows{
+					columns: []string{"relation_id"},
+					values:  [][]driver.Value{{nil}},
+				}, nil
+			},
+		},
+		{
+			name: "矛盾候補行の走査失敗",
+			call: func(store *Store) error {
+				_, err := store.SearchContradictions(context.Background(), nil, nil)
+
+				return err
+			},
+			handler: func(string) (driver.Rows, error) {
+				return &coverageRows{
+					columns: []string{"relation_id"},
+					err:     errors.New("contradiction rows failure"),
+				}, nil
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			coverageQuery = tt.handler
+			database, err := sql.Open(coverageDriverName, "")
+			if err != nil {
+				t.Fatalf("coverage用DBを開く: %v", err)
+			}
+			t.Cleanup(func() { _ = database.Close() })
+			if err := tt.call(&Store{db: database}); err == nil {
+				t.Fatal("読取失敗を返しません")
+			}
+		})
+	}
+}
+
 func TestInitializeHandlesStatesAndFailures(t *testing.T) {
 	originalMigrations := loadEmbeddedMigrations
 	originalState := inspectSchemaState
