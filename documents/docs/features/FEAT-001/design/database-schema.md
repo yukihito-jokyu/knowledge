@@ -1,6 +1,6 @@
 # FEAT-001 Database Schema Reference（SQLite v1）
 
-> DEC-FEAT-002 により人間承認済み。これは保存先を定めず、ローカル SQLite 内の論理 schema と migration 契約だけを定める。
+> DEC-FEAT-002 により人間承認済み。これはローカル SQLite 内の論理 schema と migration 契約だけを定める。通常ビルドの既定保存先は [DEC-FEAT-005](../decisions/DEC-FEAT-005.md) が定める。
 
 ## Migration
 

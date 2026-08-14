@@ -1,5 +1,9 @@
 # CLI入力規約
 
+## 端末割込み
+
+全操作で最初の`Ctrl-C`は実行中の要求を中断する。CLI境界がresponseの先頭byteを書き始める前に中断を観測した場合、success／error JSONを出力せず、stdout／stderrを空にして終了コード130で終了する。response開始後の割込みは既出力を取り消さない。これは名前付きoptionのvalidationや通常のerror responseとは別の共通終了規約である。詳細は[設計本文](../design.md#cli入力とjson出力)と[DEC-FEAT-006](../decisions/DEC-FEAT-006.md)に従う。
+
 ## 目的と根拠
 
 この資料は、11操作へ値を渡す方法を共通化する。公開契約の根拠は [DEC-FEAT-003](../decisions/DEC-FEAT-003.md) である。出力 JSON の共通形式は [設計本文](../design.md) を参照する。

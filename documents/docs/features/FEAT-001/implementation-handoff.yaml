@@ -28,6 +28,9 @@ design_readiness:
     implementation_foundation:
       status: complete
       evidence: docs/design/architecture.md#go-module-と配置規約
+    cancellation:
+      status: complete
+      evidence: docs/features/FEAT-001/decisions/DEC-FEAT-006.md
   format_schemas:
     relational_ddl:
       status: complete
@@ -137,17 +140,20 @@ acceptance_criteria:
   - create、attach-evidence、revise、supersedeは履歴を失わず、一操作一transactionで成功し、失敗時はrollbackする。
   - mutationとmigrationは現行Assertionの字句派生Indexを同一transactionで維持する。
   - Go 1.26以上の単一Go module、`modernc.org/sqlite`、Go標準`embed`を用いるmigrationが隔離SQLite DBに適用でき、初回適用・再実行・失敗時の原子性を確認できる。
+  - 通常ビルドはDEC-FEAT-005のOS標準ユーザー設定ディレクトリ配下の既定Storeを初期化し、保存先の解決・初期化・migration失敗を`storage_error`として観測できる。
+  - response開始前に観測した最初のCtrl-Cは要求Contextを全層へ伝播して処理を中断し、JSON・stdout・stderrなし、終了コード130で観測できる。中断されたmutation transactionはcommitしない。
   - v1はsemantic searchを公開せず、将来のローカルEmbedding・Vector Indexを正規データから追加できる。
 
 constraints:
   - Knowledge CLIは決定論的な保存・検索・取得・更新だけを担い、AI agent、意味判断、検索戦略、Knowledge Assessmentを内包しない。
   - StoreはローカルSQLiteであり、Knowledge CLIだけが直接変更する。
-  - 保存先、設定、運用、同期、共有、リモート接続、独立したIndex管理操作を公開契約へ追加しない。
+  - DEC-FEAT-005の既定Store以外の保存先選択、設定、運用、同期、共有、リモート接続、独立したIndex管理操作を公開契約へ追加しない。
   - 実装Taskはファイルパス、symbol、framework API、library固有の構造を指示しない。
   - Go 1.26以上の単一Go moduleとし、SQLite driverはmodernc.org/sqliteを用いる。CGOまたはC compilerをbuild前提にしない。
   - 実行入口、application、domain、SQLite persistence、migration asset、fixture、integration testの責務・依存方向はInitial Designに従う。
   - migration assetはGo標準embedでバイナリへ同梱し、実行時の外部migrationディレクトリ、保存先option、設定ファイルを追加しない。
   - 共通チェックはgofmt、go test ./...、go vet ./...とし、依存管理はgo.mod/go.sumおよびgo mod tidyで行う。第三者lintは必須化しない。
+  - 最初のCtrl-Cは公開optionを追加せず要求Contextをcancelし、response開始前に観測した場合は通常のsuccess/error JSONを出力せず終了コード130で終える。response開始後の既出力は取り消さない（DEC-FEAT-006）。
 
 decisions:
   - id: DEC-ARCH-001
@@ -162,6 +168,10 @@ decisions:
     source: docs/features/FEAT-001/decisions/DEC-FEAT-003.md
   - id: DEC-FEAT-004
     source: docs/features/FEAT-001/decisions/DEC-FEAT-004.md
+  - id: DEC-FEAT-005
+    source: docs/features/FEAT-001/decisions/DEC-FEAT-005.md
+  - id: DEC-FEAT-006
+    source: docs/features/FEAT-001/decisions/DEC-FEAT-006.md
 
 interfaces_and_contracts:
   - Knowledge CLI is the only direct writer to the local SQLite Knowledge Store.
@@ -170,6 +180,8 @@ interfaces_and_contracts:
   - The v1 operation catalog is search-text, search-concept, search-related, get, get-evidence, search-contradictions, search-temporal, create, attach-evidence, revise, and supersede.
   - Lexical search is the initial search capability; semantic search is not a v1 operation.
   - search-contradictions returns selector-matched seed, opposite Assertion target, and stored direction; contradicts endpoints are Assertion-to-Assertion only.
+  - The normal binary resolves one OS-standard user configuration directory Store at `knowledge/knowledge.db`; callers cannot select another Store through a public option, environment variable, or configuration file.
+  - A first Ctrl-C observed before response writing cancels the one request context across all layers and exits 130 with no JSON and empty stdout/stderr; output already started is not retracted.
 
 contract_artifacts:
   - kind: feature_design
@@ -201,12 +213,15 @@ out_of_scope:
   - search-semantic, local embedding execution, and vector index implementation (FEAT-006).
   - Query generation, search continuation or stopping, semantic equivalence, Evidence value or strength evaluation, and Knowledge Assessment.
   - Article Claim decomposition, reading-value evaluation, conversation-derived Evidence candidate extraction.
-  - Store location, configuration, encryption, backup, synchronization, collaboration, remote sharing, and remote connections.
+  - Store location selection, configuration, encryption, backup, synchronization, collaboration, remote sharing, and remote connections. The DEC-FEAT-005 default Store and initial migration are in scope.
 
 implementation_notes:
   - Use the operation documents as the sole detailed source for each option, JSON field, validation branch, flowchart, sequence, SQL processing, and transaction boundary.
   - Preserve the approved public v1 contract; implementation may choose internal code organization without adding public behavior.
   - Implement the approved Go responsibility boundaries: process entry composes application and SQLite persistence; application is transport- and SQLite-driver-independent; domain has no external I/O dependency; SQLite persistence owns SQL, migrations, and lexical derived index.
+  - Resolve and initialize the DEC-FEAT-005 default Store only in the process composition root. For process tests, isolate the OS-standard user configuration directory environment to a per-test temporary location and run the normal composition; do not add a public Store override.
+  - Create one request Context from the first OS interrupt at the process entry and preserve it through composition, application, domain ports, and SQLite. Check cancellation around Context-free Store setup and immediately before response writing; a cancellation observed before response writing emits no JSON and exits 130, and a mutation transaction must not commit.
+  - For process cancellation tests only, compile an `integrationtest`-tagged non-public synchronization gate that reports migration/read/mutation start and waits for the request Context. It must not alter normal composition or Store resolution, and must not be present as a public option, environment variable, or configuration in ordinary builds. Issue #179 covers the migration/read cases for retrieval only; TASK-001-06/07 must add the mutation case and prove that cancellation leaves the database unchanged before TASK-001-09 is complete.
   - Keep migration assets embedded in the binary and run gofmt, go test ./..., go vet ./..., and go mod tidy as the common Go verification and dependency-management workflow.
   - First establish TASK-001-08's shared fixture and CLI process observation boundary after the common CLI contract, then use it in TASK-001-09 to verify all operations, migration rerun, history, rollback, and contract consistency.
   - Verify the FEAT-001 CLI/Store fixture set before declaring implementation complete, including failure paths and no-partial-update behavior.

@@ -8,8 +8,8 @@ Evidence を正規根拠とする Assertion、Concept、Scope、Relation、Tempo
 
 ## Scope / Out of Scope
 
-- **含む:** REQ-009〜014 の初期提供、履歴保持、SQLite schema v1、名前付きoption入力とJSON出力を持つCLIの検索・取得・更新操作、字句 Index の維持。
-- **含まない:** `search-semantic`、Embedding／Vector Index、Codex による意味判断・検索戦略・知識状態判定、保存先・設定・同期・共有、記事・会話の入力境界。
+- **含む:** REQ-009〜014 の初期提供、履歴保持、SQLite schema v1、名前付きoption入力とJSON出力を持つCLIの検索・取得・更新操作、字句 Index の維持、DEC-FEAT-005で固定するユーザー固有の既定Store。
+- **含まない:** `search-semantic`、Embedding／Vector Index、Codex による意味判断・検索戦略・知識状態判定、保存先の選択・設定・同期・共有、記事・会話の入力境界。
 
 ## Related Requirements / Business Rules
 
@@ -82,11 +82,24 @@ CLI は結果から `known`、`no_evidence`、矛盾の意味、同一性、置�
 }
 ```
 
-error code は `validation_error`、`not_found`、`conflict`、`storage_error`、`internal_error` である。終了コードは success=0、validation=2、not-found=3、conflict=4、storage/internal=1 とする。
+error code は `validation_error`、`not_found`、`conflict`、`storage_error`、`internal_error` である。終了コードは success=0、validation=2、not-found=3、conflict=4、storage/internal=1 とする。端末からの`Ctrl-C`による要求中断だけは、responseの先頭byteを書き始める前にcancelを観測した場合、通常のerror envelopeを出力せず、stdout／stderrを空にして終了コード130で終える（[DEC-FEAT-006](decisions/DEC-FEAT-006.md)）。response開始後の割込みは既出力を取り消さず、選択済みの通常responseを完了する。
 
 ### CLI入力とJSON出力
 
-各論理操作を `knowledge <operation> --<option> <value>` として呼び出す。入力の名前付きoption、繰返しデータの順序規則は [CLI入力規約](design/cli-input-conventions.md) と各操作資料に従う。response JSON object は標準出力または標準エラーへ出力する。標準入力のrequest JSON、設定、保存先の契約は定義しない。
+各論理操作を `knowledge <operation> --<option> <value>` として呼び出す。入力の名前付きoption、繰返しデータの順序規則は [CLI入力規約](design/cli-input-conventions.md) と各操作資料に従う。response JSON object は標準出力または標準エラーへ出力する。標準入力のrequest JSON、保存先を選ぶoption、設定は定義しない。
+
+端末の最初の`Ctrl-C`は、実行中の要求を中断する。CLI境界がresponse開始前に中断を観測した場合、success／error JSONを出力せず、stdout／stderrを空にして終了コード130で終了する。これは全11操作とStore初期化に共通する例外であり、入力不正や保存失敗を表すerror codeではない。response開始後は既出力を取り消さない。
+
+### Store の既定保存先と初期化
+
+通常ビルドの `knowledge` は、`os.UserConfigDir()` 配下の `knowledge/knowledge.db` を唯一の既定Storeとする。OSごとの解決結果は、macOSでは `~/Library/Application Support/knowledge/knowledge.db`、Unixでは `$XDG_CONFIG_HOME/knowledge/knowledge.db` または `~/.config/knowledge/knowledge.db`、Windowsでは `%AppData%\\knowledge\\knowledge.db` となる。
+
+- 各操作の実行前に、composition rootが親ディレクトリを作成し、SQLite Storeをopenして未適用migrationを適用する。
+- 初回実行時は空Storeを作成する。初期化後の検索は成功の空配列、存在しないAssertionの取得は `not_found` を返す。
+- ユーザー設定ディレクトリの解決、親ディレクトリ作成、Store open、migrationの失敗は `storage_error` とする。ただし各Context非対応APIの前後およびresponse開始前に割込みを観測した場合は、`storage_error`より中断（終了コード130・無出力）を優先する。
+- 割込みで要求Contextが終了した場合は、初期化・migration・照会・更新のいずれも、response開始前に観測した限り成功JSONを返さない。更新中のtransactionはcommit前にContextを確認してcommitせず、既存のrollbackと履歴不変条件を維持する。
+- この既定保存先以外を指定する公開option、環境変数、設定ファイル、実行時の外部migrationディレクトリは提供しない。
+- read操作は、上記の初回初期化後、Assertion、Evidence、Concept、Scope、Relation、Temporal Metadata、派生Indexを変更しない。
 
 ### SQL の可変長値規約（内部）
 
@@ -115,11 +128,12 @@ Operation Documentation Coverage Gate は該当する。初期提供の全11操�
 - 不存在 ID、selector の不足・複数指定、空文字、無効な時刻／enum は `validation_error` または `not_found` で更新しない。
 - `supersede` の自己参照・循環、既に同じ置換関係がある場合は `conflict` とする。
 - mutation は一操作を一 transaction とし、失敗時に Assertion、Evidence、Relation、Index の部分更新を残さない。
+- `Ctrl-C`による中断をresponse開始前に観測した場合は`storage_error`へ写像せず、JSONを出力しない終了コード130とする。ContextはCLI入口からapplication、domain port、SQLite adapterまで同一のまま伝播し、下位層で新たに作り直さない。
 - 同一操作の再送を識別するrequest-id／冪等性キーは根拠がないため初期公開契約に含めない。再送時の重複回避は Codex 側の操作選択責務とする。
 
 ## Security / NFR Considerations
 
-Store はローカル専用 SQLite、CLI が唯一のアクセス経路である。保存先、暗号化、バックアップ、アクセス制御の追加仕様は定めない。OS 標準アクセス制御を前提とし、秘密情報・リモート接続は扱わない。
+Store はローカル専用 SQLite、CLI が唯一のアクセス経路である。既定保存先はDEC-FEAT-005に従う。保存先の選択、暗号化、バックアップ、アクセス制御の追加仕様は定めない。OS 標準アクセス制御を前提とし、秘密情報・リモート接続は扱わない。隠しまたは通常非表示のOS標準ディレクトリは利便性のためであり、追加のセキュリティ境界ではない。
 
 ## Acceptance / Test Design
 
@@ -128,6 +142,8 @@ Store はローカル専用 SQLite、CLI が唯一のアクセス経路である
 - Evidence追加、revision、supersede 後も過去 record を取得でき、失敗 mutation はDBを変更しない。
 - Relation、矛盾候補、時点差分は保存済み relation／metadata のみから候補を返す。
 - Semantic Search が初期 CLI catalog に現れず、将来 Index を Assertion ID から再構築できる現行データを保持する。
+- 通常ビルドがOS標準のユーザー固有既定Storeを初期化して全操作を実行し、失敗時は公開error／exit契約どおり `storage_error` を返す。
+- `integrationtest` build tagにだけ含める非公開同期gateでmigration・read・mutationの開始を確認してから実バイナリへ`Ctrl-C`を送る。通常compositionと隔離したOS設定ディレクトリを使い、stdout／stderrが空で終了コード130となること、mutationの事後DB状態が不変であることをprocess境界で確認する。このgateは通常ビルド、公開CLI option、公開環境変数、設定、Store overrideに含めない。Issue #179 の取得実装では migration／read を検証し、mutation executor を導入する TASK-001-06／07 で mutation の gate・事後DB状態検証を追加する。unit testでは、同一のcancel済みContextがapplicationとSQLite adapterに到達し、更新transactionがcommitしないことを確認する。
 
 ## Contract Completeness
 
@@ -137,7 +153,8 @@ Store はローカル専用 SQLite、CLI が唯一のアクセス経路である
 | CLI option入力・JSON出力 wire schema | complete | DEC-FEAT-003に基づき、共通規約、全11操作資料、全ユースケース例を更新済み。 |
 | 検索・取得規則 | complete | operation別資料に記載。 |
 | 更新・重複・原子性 | complete | 操作選択はCodex、保存上の重複制約を明記。 |
-| Migration | complete | v1 と将来互換の契約。保存先は定義しない。 |
+| Migration と既定Store | complete | v1と将来互換のmigration、およびDEC-FEAT-005のユーザー固有既定保存先。 |
+| 要求キャンセルと割込み終了 | complete | DEC-FEAT-006により、全操作のContext伝播、JSONなし、stdout／stderrなし、終了コード130を固定。 |
 | Fixture | complete | 上記 Acceptance / Test Design。 |
 
 ## Assumptions / Open Issues
@@ -145,5 +162,7 @@ Store はローカル専用 SQLite、CLI が唯一のアクセス経路である
 - **DEC-FEAT-002 (L3, superseded_in_part):** JSON出力・exit code・Indexを独立公開操作にしない方針は維持し、request JSON標準入力はDEC-FEAT-003で置き換えた。
 - **DEC-FEAT-003 (L3, decided):** 入力は名前付きoptionとし、標準入力request JSONを使わない。
 - **DEC-FEAT-004 (L3, decided):** `search-contradictions` の結果は `seed` と常にその相手である `target` を返し、保存方向は `direction` で保持する。矛盾候補を `get` / `get-evidence` へ安全に受け渡すため、`contradicts` Relation は Assertion 間に限定する。
-- **L2:** SQLite schema v1 の table／column／Index 名は、承認済み JSON 契約を満たす内部表現である。保存先・設定・運用責任を追加しない。
+- **DEC-FEAT-005 (L3, decided):** 通常ビルドは `os.UserConfigDir()/knowledge/knowledge.db` を既定Storeとして初期化する。保存先の選択、設定、運用責任を追加しない。
+- **DEC-FEAT-006 (L3, decided):** 最初の`Ctrl-C`は要求Contextをcancelし、success／error JSONおよびstdout／stderrを出さず終了コード130で終了する。
+- **L2:** SQLite schema v1 の table／column／Index 名は、承認済み JSON 契約を満たす内部表現である。
 - **既決:** Semantic Search は FEAT-006 まで延期する。
