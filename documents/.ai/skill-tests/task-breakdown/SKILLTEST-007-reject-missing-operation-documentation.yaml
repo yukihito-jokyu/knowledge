@@ -1,0 +1,15 @@
+id: SKILLTEST-007
+target_skill: task-breakdown
+related_issue: issue-175
+scenario: operation別資料とDB access mapがないCLI設計を差し戻す
+input_summary: |
+  JSON CLIとSQLiteを持つFeatureで、利用者がコマンド別I/O、DB参照、operation別図を要求している。
+  design.mdにはDDL、wire schema、全体図があるが、operation別資料、DB schema reference、access mapはない。
+expected:
+  - Taskとimplementation-handoffをreadyにせずfeature-designへ差し戻す
+  - 欠落したoperation資料、DBリファレンス、access map、operation別図をDesign Readiness Auditで具体的に示す
+forbidden:
+  - Task内でoperation別のDB接続や図を後決めにする
+  - 全体図とDDLだけで利用者が要求したoperation単位の資料を満たしたと判断する
+notes: |
+  この監査は利用者の明示要求またはOperation Documentation Coverage Gateが該当する場合にだけ適用する。

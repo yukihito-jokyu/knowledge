@@ -1,0 +1,16 @@
+id: SKILLTEST-001
+target_skill: design-review
+related_issue: issue-175
+scenario: 要件にないStore配置payloadを公開契約として追加した設計を差し戻す
+input_summary: |
+  原典IssueはローカルSQLiteとJSON CLIを求め、物理DBとMigrationの詳細を後続の詳細設計に委ねる。
+  Feature設計はinitialize operationにstore_location:stringを追加し、CLI設定・既定場所・payloadの優先順位を定義していない。
+expected:
+  - 原典、承認済みDecision、Feature設計の根拠トレーサビリティを分離する
+  - store_locationをexplicitまたは一意なderivedと判定しない
+  - 公開配置契約はdecision_requiredとしてhuman_decision_requiredまたはreturn_to_feature_designを返す
+  - 設計資料を直接修正せず、差し戻し事項を記録する
+forbidden:
+  - SQLite採用だけを根拠に公開payloadを正当化する
+  - 一般的なCLI慣行を要件の代替にする
+  - Taskまたは実装へ進める

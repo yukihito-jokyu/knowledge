@@ -1,0 +1,18 @@
+id: SKILLTEST-004
+target_skill: feature-design
+related_issue: issue-175
+scenario: 採用済みSQLiteとJSON CLIの形式契約を完成させる
+input_summary: |
+  Initial DesignでローカルSQLiteとJSON CLIが採用済みの永続化Feature。
+  設計には概念モデル、操作名、論理的な入力・エラーがあるが、DDLとoperation別JSON field schemaはない。
+expected:
+  - SQLiteのtable、column、型、NULL、key、制約、index、migration versionをDDL相当の契約としてdesign.mdへ記載する
+  - operationごとのrequest、success、errorのfield名、型、必須性、enum、ネスト、省略時の意味、代表JSONを記載する
+  - CLIのexit codeとstdout/stderrの割当を記載する
+  - Contract Completenessで形式契約をcompleteとして根拠を参照する
+forbidden:
+  - SQLite採用済みなのにテーブル名、列名、制約、indexを実装時に委ねる
+  - JSON CLI採用済みなのにoperation名だけを記載し、field schemaを省略する
+  - file path、class名、framework API、SQLite driver固有APIを設計へ埋め込む
+notes: |
+  採用済みのSQLite DDLとJSON wire formatは、技術選定そのものではなく実装者が相互運用可能にするためのPlanning側の形式契約である。

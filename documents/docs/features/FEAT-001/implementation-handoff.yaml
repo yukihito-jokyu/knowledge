@@ -1,0 +1,215 @@
+feature: FEAT-001
+name: Knowledge CLI v1
+planning_status: ready
+
+design_readiness:
+  audited_by: task-breakdown
+  status: complete
+  conclusion: >-
+    pass。詳細設計の利用者承認、独立レビューのpass、SQLite v1、全11操作の公開契約、
+    operation別資料、fixture観点、利用者承認済みGo実装基盤を確認済みであり、
+    実装者へ仕様決定を委ねる欠落はない。
+  contracts:
+    data:
+      status: complete
+      evidence: docs/features/FEAT-001/design/database-schema.md
+    operations:
+      status: complete
+      evidence: docs/features/FEAT-001/design/command-catalog.md
+    retrieval:
+      status: complete
+      evidence: docs/features/FEAT-001/design/commands/
+    migration:
+      status: complete
+      evidence: docs/features/FEAT-001/design/database-schema.md#migration
+    fixtures:
+      status: complete
+      evidence: docs/features/FEAT-001/design.md#acceptance--test-design
+    implementation_foundation:
+      status: complete
+      evidence: docs/design/architecture.md#go-module-と配置規約
+  format_schemas:
+    relational_ddl:
+      status: complete
+      evidence: docs/features/FEAT-001/design/database-schema.md#ddl
+    json_operations:
+      status: complete
+      evidence: docs/features/FEAT-001/design.md#interfaces--data
+  diagrams:
+    flowchart:
+      status: complete
+      evidence: docs/features/FEAT-001/design/commands/
+    sequence:
+      status: complete
+      evidence: docs/features/FEAT-001/design/commands/
+  operation_documentation:
+    status: complete
+    command_catalog: docs/features/FEAT-001/design/command-catalog.md
+    operation_contracts: docs/features/FEAT-001/design/commands/
+    database_schema_reference: docs/features/FEAT-001/design/database-schema.md
+    database_relationship_map: docs/features/FEAT-001/design/database-schema.md#table-と関係
+    database_access_map: docs/features/FEAT-001/design/database-access-map.md
+    evidence: docs/features/FEAT-001/design.md#operation-documentation
+  independent_design_review:
+    status: complete
+    reviewer: design-review
+    reviewed_by: independent_subagent
+    result: pass
+    evidence: docs/features/FEAT-001/design-review.md
+  human_design_review:
+    status: approved
+    approved_by: human
+    evidence: .ai/workflow/state.yaml#features.FEAT-001.human_design_review
+
+requirements:
+  - REQ-009
+  - REQ-010
+  - REQ-011 (initial delivery deferred; semantic search is FEAT-006)
+  - REQ-012
+  - REQ-013
+  - REQ-014
+business_rules:
+  - BR-002
+  - BR-004
+  - BR-007
+  - BR-008
+  - BR-010
+nonfunctional_requirements:
+  - NFR-004
+  - NFR-005
+
+logical_areas:
+  - persistence / migration
+  - interface
+  - retrieval
+  - mutation
+  - verification
+
+tasks:
+  - id: TASK-001-01
+    title: SQLite v1 schema と migration 契約を実現する
+    logical_area: persistence / migration
+    depends_on: []
+  - id: TASK-001-02
+    title: 共通 CLI 入出力・エラー境界を実現する
+    logical_area: interface
+    depends_on: [TASK-001-01]
+  - id: TASK-001-03
+    title: Assertion と Evidence の取得・字句／Concept検索を実現する
+    logical_area: retrieval
+    depends_on: [TASK-001-01, TASK-001-02]
+    operations: [search-text, search-concept, get, get-evidence]
+  - id: TASK-001-04
+    title: Relation検索と矛盾候補検索を実現する
+    logical_area: retrieval
+    depends_on: [TASK-001-01, TASK-001-02]
+    operations: [search-related, search-contradictions]
+  - id: TASK-001-05
+    title: 時点差分検索を実現する
+    logical_area: retrieval
+    depends_on: [TASK-001-01, TASK-001-02]
+    operations: [search-temporal]
+  - id: TASK-001-06
+    title: Assertion作成と派生字句Index維持を実現する
+    logical_area: mutation
+    depends_on: [TASK-001-01, TASK-001-02]
+    operations: [create]
+  - id: TASK-001-07
+    title: Evidence追加・revision・置換履歴を実現する
+    logical_area: mutation
+    depends_on: [TASK-001-03, TASK-001-06]
+    operations: [attach-evidence, revise, supersede]
+  - id: TASK-001-08
+    title: 共通fixture・CLI process検証基盤を整備する
+    logical_area: verification
+    depends_on: [TASK-001-02]
+  - id: TASK-001-09
+    title: 全操作の契約・履歴・失敗原子性を横断検証する
+    logical_area: verification
+    depends_on: [TASK-001-03, TASK-001-04, TASK-001-05, TASK-001-06, TASK-001-07, TASK-001-08]
+
+acceptance_criteria:
+  - Assertion、Evidence、Concept、Scope、Relation、Temporal Metadataを意味ごとに保存・取得できる。
+  - Evidenceがない状態を、ユーザーが知らないという判断へ変換しない。
+  - 初期提供の11操作を名前付きoptionで呼び出せ、success JSON、error JSON、stdout/stderr、exit codeが公開契約に一致する。
+  - 字句・Concept・Relation・Evidence・矛盾候補・時点差分を決定論的に検索でき、空検索は成功の空配列である。
+  - search-contradictionsはseed、常に相手Assertionであるtarget、保存方向directionを返し、contradictsをAssertion間に限定する。
+  - create、attach-evidence、revise、supersedeは履歴を失わず、一操作一transactionで成功し、失敗時はrollbackする。
+  - mutationとmigrationは現行Assertionの字句派生Indexを同一transactionで維持する。
+  - Go 1.26以上の単一Go module、`modernc.org/sqlite`、Go標準`embed`を用いるmigrationが隔離SQLite DBに適用でき、初回適用・再実行・失敗時の原子性を確認できる。
+  - v1はsemantic searchを公開せず、将来のローカルEmbedding・Vector Indexを正規データから追加できる。
+
+constraints:
+  - Knowledge CLIは決定論的な保存・検索・取得・更新だけを担い、AI agent、意味判断、検索戦略、Knowledge Assessmentを内包しない。
+  - StoreはローカルSQLiteであり、Knowledge CLIだけが直接変更する。
+  - 保存先、設定、運用、同期、共有、リモート接続、独立したIndex管理操作を公開契約へ追加しない。
+  - 実装Taskはファイルパス、symbol、framework API、library固有の構造を指示しない。
+  - Go 1.26以上の単一Go moduleとし、SQLite driverはmodernc.org/sqliteを用いる。CGOまたはC compilerをbuild前提にしない。
+  - 実行入口、application、domain、SQLite persistence、migration asset、fixture、integration testの責務・依存方向はInitial Designに従う。
+  - migration assetはGo標準embedでバイナリへ同梱し、実行時の外部migrationディレクトリ、保存先option、設定ファイルを追加しない。
+  - 共通チェックはgofmt、go test ./...、go vet ./...とし、依存管理はgo.mod/go.sumおよびgo mod tidyで行う。第三者lintは必須化しない。
+
+decisions:
+  - id: DEC-ARCH-001
+    source: docs/design/decisions/DEC-ARCH-001.md
+  - id: DEC-ARCH-002
+    source: docs/design/decisions/DEC-ARCH-002.md
+  - id: DEC-FEAT-001
+    source: docs/features/FEAT-001/decisions/DEC-FEAT-001.md
+  - id: DEC-FEAT-002
+    source: docs/features/FEAT-001/decisions/DEC-FEAT-002.md
+  - id: DEC-FEAT-003
+    source: docs/features/FEAT-001/decisions/DEC-FEAT-003.md
+  - id: DEC-FEAT-004
+    source: docs/features/FEAT-001/decisions/DEC-FEAT-004.md
+
+interfaces_and_contracts:
+  - Knowledge CLI is the only direct writer to the local SQLite Knowledge Store.
+  - All v1 operations use named options; successful JSON is written to stdout and error JSON to stderr.
+  - The common envelope, error codes, exit codes, null/omission and array semantics are fixed by the approved design.
+  - The v1 operation catalog is search-text, search-concept, search-related, get, get-evidence, search-contradictions, search-temporal, create, attach-evidence, revise, and supersede.
+  - Lexical search is the initial search capability; semantic search is not a v1 operation.
+  - search-contradictions returns selector-matched seed, opposite Assertion target, and stored direction; contradicts endpoints are Assertion-to-Assertion only.
+
+contract_artifacts:
+  - kind: feature_design
+    source: docs/features/FEAT-001/design.md
+  - kind: implementation_architecture
+    source: docs/design/architecture.md#go-module-と配置規約
+  - kind: implementation_foundation_decision
+    source: docs/design/decisions/DEC-ARCH-002.md
+  - kind: task_001_01_implementation_foundation_trace
+    source: docs/features/FEAT-001/tasks.md#task-001-01-sqlite-v1-schema-と-migration-契約を実現する
+  - kind: operation_catalog
+    source: docs/features/FEAT-001/design/command-catalog.md
+  - kind: cli_input_contract
+    source: docs/features/FEAT-001/design/cli-input-conventions.md
+  - kind: operation_contracts
+    source: docs/features/FEAT-001/design/commands/
+  - kind: relational_ddl_and_migration
+    source: docs/features/FEAT-001/design/database-schema.md
+  - kind: database_access_map
+    source: docs/features/FEAT-001/design/database-access-map.md
+  - kind: use_cases
+    source: docs/features/FEAT-001/design/use-cases/
+  - kind: independent_design_review
+    source: docs/features/FEAT-001/design-review.md
+  - kind: human_design_review
+    source: .ai/workflow/state.yaml#features.FEAT-001.human_design_review
+
+out_of_scope:
+  - search-semantic, local embedding execution, and vector index implementation (FEAT-006).
+  - Query generation, search continuation or stopping, semantic equivalence, Evidence value or strength evaluation, and Knowledge Assessment.
+  - Article Claim decomposition, reading-value evaluation, conversation-derived Evidence candidate extraction.
+  - Store location, configuration, encryption, backup, synchronization, collaboration, remote sharing, and remote connections.
+
+implementation_notes:
+  - Use the operation documents as the sole detailed source for each option, JSON field, validation branch, flowchart, sequence, SQL processing, and transaction boundary.
+  - Preserve the approved public v1 contract; implementation may choose internal code organization without adding public behavior.
+  - Implement the approved Go responsibility boundaries: process entry composes application and SQLite persistence; application is transport- and SQLite-driver-independent; domain has no external I/O dependency; SQLite persistence owns SQL, migrations, and lexical derived index.
+  - Keep migration assets embedded in the binary and run gofmt, go test ./..., go vet ./..., and go mod tidy as the common Go verification and dependency-management workflow.
+  - First establish TASK-001-08's shared fixture and CLI process observation boundary after the common CLI contract, then use it in TASK-001-09 to verify all operations, migration rerun, history, rollback, and contract consistency.
+  - Verify the FEAT-001 CLI/Store fixture set before declaring implementation complete, including failure paths and no-partial-update behavior.
+  - The cross-feature Scenario A-J and layered evaluation required by NFR-006 are owned by FEAT-005; FEAT-001 supplies deterministic CLI/Store fixtures that it can consume.
+
+version: 0.1

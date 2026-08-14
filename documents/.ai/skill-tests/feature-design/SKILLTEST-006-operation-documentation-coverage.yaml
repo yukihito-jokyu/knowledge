@@ -1,0 +1,25 @@
+id: SKILLTEST-006
+target_skill: feature-design
+related_issue: issue-175
+scenario: SQLite JSON CLIをoperation単位で実装可能な資料へ分解する
+input_summary: |
+  SQLiteへ履歴データを保存するJSON CLI Feature。DDLとoperation別field schemaはあるが、
+  create、revise、search-text等のI/O、DBアクセス、transaction、図が1つの巨大なdesign.mdに散在している。
+  利用者はコマンドごとのI/O、DBリファレンス、コマンド別フローチャートとシーケンス図を求めている。
+expected:
+  - design.mdを入口にし、command catalog、operation別資料、DB schema reference、relationship map、access mapを相互リンクして作成する
+  - 各operation資料を「I / O」「フローチャート」「シーケンス図」「DB接続」の順にし、I/Oはインデント付き複数行のrequest／response JSON code block、DB接続はSQL code blockで具体化する
+  - 各operationについて要求されたフローチャートとシーケンス図を作成するか、不要理由を記録する
+  - DDLだけでなく、table/column/constraint/indexと他tableの参照関係を説明するDBリファレンスを作成する
+  - 操作を組み合わせて利用目的を達成するため、ユースケース別資料へ目的、根拠、利用者、前提、操作列、各操作を使う理由、終了条件を記載する。JSON CLIでは順序ごとにコマンド、入力JSON、成功応答JSON、応答値から次入力への受渡しを示し、全operationとの対応と過不足・矛盾監査を記録する
+forbidden:
+  - 全operationの具体を全体フロー図または単一の巨大表だけで代替する
+  - DB接続を「SQLiteに保存する」とだけ記述してtable、主要column、transaction境界を省略する
+  - コマンド資料だけを並べ、利用目的ごとの操作順・操作を選ぶ責務・組合せの過不足を説明または監査しない
+  - ユースケースの操作順だけを記載し、実際のJSON入出力と次操作へ渡すID・値を例で示さない
+  - 利用者がユースケース別資料への完全移行を指示したのに、既存のユースケース正本を残す
+  - 操作列・JSON・値の受渡し例を、ユースケース別資料ではなく索引へ重複して記載する
+  - file path、symbol、framework API、SQLite driver固有APIを実装指定として記載する
+notes: |
+  図の要否はFeatureの性質または利用者の要求に従う。JSON CLIとSQLiteの採用は承認済み前提であり、
+  operation単位の資料化は新たな技術選定ではない。

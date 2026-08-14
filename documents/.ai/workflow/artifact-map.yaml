@@ -1,0 +1,109 @@
+version: 0.1
+
+artifacts:
+  workflow_state:
+    owner: planning-orchestrator
+    path: .ai/workflow/state.yaml
+
+  requirements_system_context:
+    owner: requirements-structuring
+    path: docs/requirements/system-context.md
+
+  requirements_catalog:
+    owner: requirements-structuring
+    path: docs/requirements/requirements.md
+
+  business_rules:
+    owner: requirements-structuring
+    path: docs/requirements/business-rules.md
+
+  nonfunctional_requirements:
+    owner: requirements-structuring
+    path: docs/requirements/nonfunctional-requirements.md
+
+  constraints:
+    owner: requirements-structuring
+    path: docs/requirements/constraints.md
+
+  requirements_unresolved:
+    owner: requirements-structuring
+    path: docs/requirements/unresolved-issues.md
+
+  feature_map:
+    owner: feature-planning
+    path: docs/planning/feature-map.md
+
+  feature_dependencies:
+    owner: feature-planning
+    path: docs/planning/feature-dependencies.md
+
+  backlog:
+    owner: feature-planning
+    path: docs/planning/backlog.md
+
+  traceability:
+    owner: feature-planning
+    path: docs/planning/traceability.md
+
+  architecture:
+    owner: initial-design
+    path: docs/design/architecture.md
+
+  domain_boundaries:
+    owner: initial-design
+    path: docs/design/domain-boundaries.md
+
+  cross_cutting:
+    owner: initial-design
+    path: docs/design/cross-cutting-concerns.md
+
+  data_ownership:
+    owner: initial-design
+    path: docs/design/data-ownership.md
+
+  technology_constraints:
+    owner: initial-design
+    path: docs/design/technology-constraints.md
+
+  feature_requirements:
+    owner: feature-design
+    path: docs/features/{feature_id}/requirements.md
+
+  feature_design:
+    owner: feature-design
+    path: docs/features/{feature_id}/design.md
+
+  feature_design_supporting_docs:
+    owner: feature-design
+    path: docs/features/{feature_id}/design/
+
+  feature_design_review:
+    owner: design-review
+    path: docs/features/{feature_id}/design-review.md
+
+  feature_decisions:
+    owner: feature-design
+    path: docs/features/{feature_id}/decisions/
+
+  feature_change_requests:
+    owner: feature-design
+    path: docs/features/{feature_id}/design-change-requests/
+
+  feature_tasks:
+    owner: task-breakdown
+    path: docs/features/{feature_id}/tasks.md
+
+  implementation_handoff:
+    owner: task-breakdown
+    path: docs/features/{feature_id}/implementation-handoff.yaml
+
+  implementation_skill_registry:
+    owner: implementation-skill-builder
+    path: .ai/workflow/implementation-skills.yaml
+
+ownership_rules:
+  - An owner skill may create and update its artifacts.
+  - Non-owner skills must treat artifacts as read-only unless explicitly delegated by the owner.
+  - If a non-owner detects that an artifact must change, create or surface a change request and route back to the owner skill.
+  - planning-orchestrator must not author domain, design, requirement, or task content.
+  - skill-maintainer may edit skill definitions and workflow policy files, but must not silently rewrite project design artifacts to hide a skill defect.

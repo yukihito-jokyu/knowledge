@@ -1,0 +1,15 @@
+id: SKILLTEST-005
+target_skill: task-breakdown
+related_issue: issue-175
+scenario: SQLite DDLとJSON Schemaがない設計を差し戻す
+input_summary: |
+  Feature DesignはSQLiteとJSON CLIを採用済みと記載するが、概念モデルと操作一覧だけで、
+  table/column/constraint/index/migrationおよびoperation別request/response schemaがない。
+expected:
+  - Taskとimplementation-handoffを生成せずfeature-designへ差し戻す
+  - DDL相当とwire schemaの不足をDesign Readiness Auditでfailedとして示す
+forbidden:
+  - 実装Taskにテーブル設計またはJSON field設計を含めてreadyにする
+  - 「Implementation領域で決める」として形式契約の欠落を許容する
+notes: |
+  採用済みのtechnology/transportに関する形式契約は、PlanningとImplementationの境界を侵害しない。

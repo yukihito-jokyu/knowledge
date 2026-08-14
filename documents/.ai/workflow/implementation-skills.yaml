@@ -1,0 +1,17 @@
+version: 0.1
+skills:
+  - name: impl-knowledge-cli
+    path: ../.agents/skills/impl-knowledge-cli/SKILL.md
+    capabilities:
+      - go-cli-process-boundary
+      - application-domain-persistence-boundaries
+      - sqlite-migration-and-transaction
+      - cli-process-integration-testing
+    evidence:
+      - AGENTS.md
+      - docs/design/architecture.md
+      - docs/design/cross-cutting-concerns.md
+      - docs/design/technology-constraints.md
+      - docs/design/decisions/DEC-ARCH-002.md
+      - docs/features/FEAT-001/implementation-handoff.yaml
+    status: active

@@ -1,0 +1,3 @@
+id,target_skill,should_trigger,prompt,expected_note
+trigger-001,feature-design,true,"Design FEAT-007 so it is ready for task breakdown","Should perform one-feature JIT design"
+trigger-002,feature-design,false,"Implement FEAT-007 now","Implementation is outside feature-design scope"

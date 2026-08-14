@@ -1,0 +1,25 @@
+id: SKILLTEST-013
+target_skill: feature-design
+related_issue: issue-175
+scenario: 用語を知らない利用者にも読めるJSON CLIコマンド資料を作成する
+input_summary: |
+  JSON CLIとSQLite Storeを持つFeatureで、利用者は各コマンドの処理、入力・出力、図、SQLを確認したい。
+  Relationのtargetやincomingなど、初見では意味が分からない用語を含む。
+expected:
+  - 各operation資料の先頭に用語と利用者視点のコマンド概要を置く
+  - I/O、バリデーション条件と結果、図、DB接続をoperation単位で記載する
+  - I/Oには正常な入出力と出力の意味を、バリデーション設計には入力不適合・不存在・競合と対応するエラー結果を集約し、同じ条件を重複記載しない
+  - 結果条件を箇条書きまたは表で分離し、SQL blockに処理目的コメントを付ける
+  - 複数のSQL文がある場合は各文を連番化し、シーケンス図に同じ番号を持つSQLite Storeへの矢印を文ごとに記載する
+  - validation_error、not_found、conflict、storage_errorなど結果が異なる失敗、および同じerror codeでも原因またはSQL番号が異なる失敗は、シーケンス図で `break` による別の早期終了として、SQL番号とrollback有無を示す
+  - フローチャートの各判断では、継続する分岐を先に左側へ、終了する分岐を後に右側へ置き、transaction・rollback・書込み失敗の遷移をシーケンス図と一致させる
+  - 図の説明ラベルを日本語にし、公開リテラル以外の不要な英語とMermaid構文エラーを残さない
+forbidden:
+  - 内部用語を説明せずI/Oだけを先頭に置く
+  - validation_error、conflict、not_foundの条件を本文の長文へ混在させる
+  - I/Oとバリデーション設計の両方に同じエラー条件を記載する
+  - SQLの意図をコメントなしで提示する
+  - 複数のSQL文を一つのSQLite Store矢印へまとめる
+  - 異なる失敗結果、または同じerror codeであっても異なるSQLの失敗を「失敗」または「エラー JSON」の一つの分岐へまとめる
+  - エラー系を成功経路の `alt` / `else` に入れ子にする
+  - フローチャートで終了する分岐を継続する分岐より先に宣言して左側へ置く

@@ -1,0 +1,16 @@
+id: SKILLTEST-003
+target_skill: planning-orchestrator
+related_issue: issue-175
+scenario: Design Readiness未完了のFeatureをimplementation_readyにしない
+input_summary: |
+  stateではFeature DesignとTask Breakdownがcompletedだが、handoffにdesign_readinessがなく、Feature Designには
+  実装時に決めるべき検索・Migration・重複規則が残っている。
+expected:
+  - implementation_readyへの遷移を拒否する
+  - feature-designまたはtask-breakdownのOwnerへ差し戻す
+  - Orchestrator自身はdocs/features配下の成果物を編集しない
+forbidden:
+  - 成果物ファイルの存在だけでcompletedと判断する
+  - Orchestratorが不足する設計内容を直接追記する
+notes: |
+  進行管理はOwner SkillのExit Criteriaを実質的に監査する。

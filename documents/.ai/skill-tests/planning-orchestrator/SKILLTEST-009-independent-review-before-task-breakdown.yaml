@@ -1,0 +1,13 @@
+id: SKILLTEST-009
+target_skill: planning-orchestrator
+related_issue: issue-175
+scenario: 詳細設計後に独立subagentレビューを経ずTask Breakdownへ進ませない
+input_summary: |
+  Feature Designはcompletedだがdesign-review.mdがない。FeatureにはJSON CLIとSQLite Storeがある。
+expected:
+  - freshなsubagentへdesign-reviewを委譲する
+  - reviewがpassになるまでtask-breakdownへルーティングしない
+  - reviewが人間Decisionを要求した場合はDecisionを提示して停止する
+forbidden:
+  - 設計者自身のConsistency CheckだけでTask Breakdownへ進める
+  - Orchestratorが設計資料を修正する

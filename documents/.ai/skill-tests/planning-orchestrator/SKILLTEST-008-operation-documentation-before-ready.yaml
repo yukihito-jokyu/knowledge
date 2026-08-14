@@ -1,0 +1,14 @@
+id: SKILLTEST-008
+target_skill: planning-orchestrator
+related_issue: issue-175
+scenario: operation資料の監査未完了でimplementation_readyにしない
+input_summary: |
+  Task BreakdownがSQLite JSON CLI Featureのhandoffをreadyにしようとしているが、
+  operation_documentationがincompleteで、コマンド別I/OとDB access mapの参照がない。
+expected:
+  - planning-orchestratorはimplementation_readyへ更新せずtask-breakdownとfeature-designへ不足を返す
+  - stateにはreadyを記録しない
+forbidden:
+  - DDLとwire schemaがcompleteであることだけを理由にreadyにする
+notes: |
+  Operation Documentation Coverage Gateが該当するFeatureに限る。

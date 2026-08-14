@@ -1,0 +1,15 @@
+id: SKILLTEST-017
+target_skill: planning-orchestrator
+related_issue: issue-175
+scenario: 実装基盤を参照できない新規CLI Featureをimplementation_readyにしない
+input_summary: |
+  stateではTask Breakdownがcompletedで、handoffにはSQLite schemaとJSON CLI契約の参照がある。
+  しかし新規リポジトリに実装コードはなく、Initial Designにも言語、SQLite driver、配置規約、検証手順がない。
+expected:
+  - implementation_readyへの遷移を拒否し、Initial DesignのOwnerへ差し戻す
+  - handoffが技術基盤を参照できるまでstateをreadyにしない
+forbidden:
+  - Task/Handoffの存在だけを根拠にreadyへ更新する
+  - Orchestrator自身が技術スタックやディレクトリ構成を設計成果物へ追記する
+notes: |
+  既存コードまたは承認済みInitial Designに同等の実装規約がある場合は、その参照を確認して進められる。

@@ -1,0 +1,113 @@
+# Reference schema. This is descriptive, not a strict JSON Schema.
+feature: FEAT-XXX
+name: ExampleFeature
+planning_status: ready
+
+design_readiness:
+  audited_by: task-breakdown
+  status: complete
+  # 各項目は complete または not_applicable とし、根拠となる設計節を参照する。
+  contracts:
+    data:
+      status: complete
+      evidence: docs/features/FEAT-XXX/design.md#contract-completeness
+    operations:
+      status: complete
+      evidence: docs/features/FEAT-XXX/design.md#contract-completeness
+    retrieval:
+      status: not_applicable
+      evidence: docs/features/FEAT-XXX/design.md#contract-completeness
+    migration:
+      status: not_applicable
+      evidence: docs/features/FEAT-XXX/design.md#contract-completeness
+    fixtures:
+      status: complete
+      evidence: docs/features/FEAT-XXX/design.md#acceptance--test-design
+  format_schemas:
+    relational_ddl:
+      # SQLite／関係DBが採用済みなら complete。未採用なら not_applicable と理由を記録する。
+      status: not_applicable
+      evidence: docs/features/FEAT-XXX/design.md#physical-schema
+    json_operations:
+      # JSON CLI／APIが採用済みなら complete。未採用なら not_applicable と理由を記録する。
+      status: not_applicable
+      evidence: docs/features/FEAT-XXX/design.md#wire-schema
+  diagrams:
+    flowchart:
+      status: not_applicable
+      evidence: docs/features/FEAT-XXX/design.md#selected-design-analyses
+    sequence:
+      status: not_applicable
+      evidence: docs/features/FEAT-XXX/design.md#selected-design-analyses
+  operation_documentation:
+    # JSON CLI/APIと永続Storeを併せ持つ、または利用者がoperation単位の資料を要求した場合にcomplete。
+    # 不要な図はoperation名と理由をevidenceで参照する。
+    status: not_applicable
+    command_catalog: docs/features/FEAT-XXX/design/command-catalog.md
+    operation_contracts: docs/features/FEAT-XXX/design/commands/
+    database_schema_reference: docs/features/FEAT-XXX/design/database/schema-reference.md
+    database_relationship_map: docs/features/FEAT-XXX/design/database/relationship-map.md
+    database_access_map: docs/features/FEAT-XXX/design/database/access-map.md
+    evidence: docs/features/FEAT-XXX/design.md#operation-documentation
+  independent_design_review:
+    # design-reviewを設計者と異なるfreshなsubagentで実行した結果。pass以外ではhandoff不可。
+    status: complete
+    reviewer: design-review
+    reviewed_by: independent_subagent
+    evidence: docs/features/FEAT-XXX/design-review.md
+  human_design_review:
+    # 独立レビューのpass後に、利用者が詳細設計を明示承認した記録。承認なしではhandoff不可。
+    status: approved
+    approved_by: human
+    evidence: .ai/workflow/state.yaml#features.FEAT-XXX.human_design_review
+
+requirements:
+  - REQ-XXX
+business_rules:
+  - BR-XXX
+nonfunctional_requirements: []
+
+tasks:
+  - id: TASK-XXX
+    title: Example logical task
+    logical_area: application
+    depends_on: []
+
+logical_areas:
+  - application
+
+acceptance_criteria:
+  - Observable behavior that must be true after implementation
+
+constraints:
+  - Constraint inherited from requirements or design
+
+decisions:
+  - id: DEC-XXX
+    source: docs/features/FEAT-XXX/decisions/DEC-XXX.md
+
+interfaces_and_contracts:
+  - Contract or boundary the implementation must respect
+
+contract_artifacts:
+  # 各required contractは設計節または独立した契約Artifactを参照する。
+  - kind: operation_contract
+    source: docs/features/FEAT-XXX/design.md#interfaces--data
+  - kind: relational_ddl
+    source: docs/features/FEAT-XXX/design.md#physical-schema
+  - kind: json_operation_schema
+    source: docs/features/FEAT-XXX/design.md#wire-schema
+  - kind: operation_documentation
+    source: docs/features/FEAT-XXX/design.md#operation-documentation
+  - kind: independent_design_review
+    source: docs/features/FEAT-XXX/design-review.md
+  - kind: human_design_review
+    source: .ai/workflow/state.yaml#features.FEAT-XXX.human_design_review
+
+out_of_scope:
+  - Explicitly excluded work
+
+implementation_notes:
+  # Planning-side notes only. Do not prescribe file paths, symbols, frameworks,
+  # or code structure unless those are already fixed by Initial Design.
+  - No implementation-specific decision yet
