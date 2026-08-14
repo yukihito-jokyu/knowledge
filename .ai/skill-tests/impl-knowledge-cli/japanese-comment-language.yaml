@@ -1,0 +1,19 @@
+id: impl-knowledge-cli-japanese-comments
+target_skill: impl-knowledge-cli
+scenario: 日本語を主言語とするリポジトリで、SQLite persistenceへ説明コメントを追加する。
+input_summary: migration SQLとGoファイルにテーブル・接続管理のコメントを追加する実装依頼。
+expected:
+  - Goとmigration SQLの説明コメントを、識別子・コンパイラ指示以外は日本語で端的に記述する。
+  - Goの複数要素の配列・sliceリテラルは、各要素を1行ずつに記述する。
+  - unit testをテーブル駆動で追加し、Skill配下の検査スクリプトでstatement coverage 100%を強制する。
+  - SQLite adapterのSQL文を使う関数の直前に個別の定数として置き、複数行で整形する。
+  - 固定個数のIN条件を`?`プレースホルダーで束縛する。
+  - コメントだけの変更では、承認済みの公開CLI契約やDDLの動作を変更しない。
+forbidden:
+  - 英語の説明語を含む説明コメントを追加する。
+  - 複数の配列・slice要素を同じ行に記述する。
+  - コメント追加に伴い、公開契約またはschemaを変更する。
+  - カバレッジが100%未満でも検査を成功させる。
+  - SQLite adapterの関数内へSQL文を直接記述する、または用途の異なるSQL定数を一つにまとめる。
+  - 固定個数のIN条件を文字列置換で組み立てる。
+related_issue: '#177'

@@ -39,6 +39,13 @@ description: Knowledge CLIのGo実装におけるCLI境界、application/domain/
 - `internal/persistence/sqlite`がSQLite接続、SQL、migration、派生字句Indexを所有し、applicationまたはCLI entryをimportしない。
 - migration SQL assetはGo標準`embed`で同梱する。既適用migrationを編集せず、必要な変更には後続versionを追加する。
 - 公開CLIのoption、JSON、stdout/stderr、exit code、保存先、設定、運用仕様を追加・変更しない。
+- Goおよびmigration SQLの説明コメントは、識別子・コンパイラ指示を除いて日本語で端的に記述し、英語の説明語を残さない。
+- Goの複数要素の配列・sliceリテラルは、各要素を1行ずつに記述する。
+- Goの複合リテラルは、各フィールドを1行ずつに記述する。`scripts/check_composite_literal_layout.sh`で違反を検査する。
+- SQLite adapterのSQL文は、使う関数の直前に個別のパッケージレベル定数として置き、複数行で整形する。関数内へ直接記述しない。
+- SQLへ値を渡すときは`?`プレースホルダーを使う。固定個数の`IN`条件を文字列置換で組み立てない。
+- unit testはテーブル駆動で記述し、Skill配下の`scripts/check_test_coverage.sh`で全対象packageのstatement coverage 100%を確認する。
+- 実行環境上再現不能な分岐がある場合は、対象コードへ日本語の理由をコメントし、テスト可能な内部依存を注入してカバーする。
 
 ## File Placement Rules
 
@@ -76,6 +83,7 @@ description: Knowledge CLIのGo実装におけるCLI境界、application/domain/
 - `gofmt` を変更したGoファイルに実行する。
 - `go test ./...`
 - `go vet ./...`
+- `.agents/skills/impl-knowledge-cli/scripts/check_test_coverage.sh`
 - 変更内容に応じて、対象のCLI process integration testとmigrationの初回・再実行・rollback検証を実行する。
 
 ## Completion Criteria
