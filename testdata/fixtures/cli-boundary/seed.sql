@@ -1,7 +1,7 @@
 INSERT INTO assertions (assertion_id, current_revision, created_at) VALUES ('asrt_01', 1, '2026-08-14T00:00:00Z');
 INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at) VALUES ('asrt_01', 1, 'channel send', '2026-08-14T00:00:00Z');
 INSERT INTO revision_scopes (assertion_id, revision, scope_key, scope_value) VALUES ('asrt_01', 1, 'language', 'Go');
-INSERT INTO temporal_metadata (assertion_id, revision) VALUES ('asrt_01', 1);
+INSERT INTO temporal_metadata (assertion_id, revision, valid_from, valid_until) VALUES ('asrt_01', 1, '2026-08-14T00:00:00.000000000Z', '2026-12-31T23:59:59.000000000Z');
 INSERT INTO concepts (concept_id, name, created_at) VALUES ('cpt_01', 'channel', '2026-08-14T00:00:00Z');
 INSERT INTO concept_terms (term, concept_id, term_kind) VALUES ('channel', 'cpt_01', 'name');
 INSERT INTO concept_aliases (alias, concept_id) VALUES ('chan', 'cpt_01');
@@ -12,5 +12,17 @@ INSERT INTO assertion_lexical_index (assertion_id, normalized_text, concept_name
 INSERT INTO assertions (assertion_id, current_revision, created_at) VALUES ('asrt_02', 1, '2026-08-14T00:00:00Z');
 INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at) VALUES ('asrt_02', 1, 'empty evidence', '2026-08-14T00:00:00Z');
 INSERT INTO assertion_concepts (assertion_id, concept_id) VALUES ('asrt_02', 'cpt_01');
+INSERT INTO assertions (assertion_id, current_revision, created_at) VALUES ('asrt_03', 1, '2026-08-14T00:00:00Z');
+INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at) VALUES ('asrt_03', 1, 'unknown period', '2026-08-14T00:00:00Z');
+INSERT INTO revision_scopes (assertion_id, revision, scope_key, scope_value) VALUES ('asrt_03', 1, 'category', 'unknown');
+INSERT INTO temporal_metadata (assertion_id, revision) VALUES ('asrt_03', 1);
+INSERT INTO assertions (assertion_id, current_revision, created_at) VALUES ('asrt_04', 1, '2026-08-14T00:00:00Z');
+INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at) VALUES ('asrt_04', 1, 'open period', '2026-08-14T00:00:00Z');
+INSERT INTO revision_scopes (assertion_id, revision, scope_key, scope_value) VALUES ('asrt_04', 1, 'language', 'Go'), ('asrt_04', 1, 'os', 'macOS');
+INSERT INTO temporal_metadata (assertion_id, revision, valid_from) VALUES ('asrt_04', 1, '2025-01-01T00:00:00.000000000Z');
+INSERT INTO assertions (assertion_id, current_revision, created_at) VALUES ('asrt_05', 1, '2026-08-14T00:00:00Z');
+INSERT INTO assertion_revisions (assertion_id, revision, normalized_text, created_at) VALUES ('asrt_05', 1, 'fractional boundary', '2026-08-14T00:00:00Z');
+INSERT INTO revision_scopes (assertion_id, revision, scope_key, scope_value) VALUES ('asrt_05', 1, 'precision', 'fraction');
+INSERT INTO temporal_metadata (assertion_id, revision, valid_from, valid_until) VALUES ('asrt_05', 1, '2026-08-14T00:00:00.100000000Z', '2026-08-14T00:00:00.100000000Z');
 INSERT INTO relations (relation_id, source_kind, source_id, relation_type, target_kind, target_id, created_at) VALUES ('rel_01', 'assertion', 'asrt_01', 'causes', 'assertion', 'asrt_02', '2026-08-14T00:00:00Z');
 INSERT INTO relations (relation_id, source_kind, source_id, relation_type, target_kind, target_id, created_at) VALUES ('rel_02', 'assertion', 'asrt_01', 'contradicts', 'assertion', 'asrt_02', '2026-08-14T00:00:00Z');
