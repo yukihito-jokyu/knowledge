@@ -93,6 +93,21 @@ func TestExecuteRetrievalWithStore(t *testing.T) {
 			wantContext: true,
 		},
 		{
+			name: "search-temporal",
+			arguments: []string{
+				"search-temporal",
+				"--concept",
+				"channel",
+				"--scope-key",
+				"language",
+				"--scope-value",
+				"Go",
+			},
+			wantHandled: true,
+			wantData:    true,
+			wantContext: true,
+		},
+		{
 			name: "search-relatedのnot_found",
 			arguments: []string{
 				"search-related",
@@ -113,6 +128,17 @@ func TestExecuteRetrievalWithStore(t *testing.T) {
 				"asrt_01",
 			},
 			store:       retrievalStoreStub{contradictionError: errors.New("read failure")},
+			wantHandled: true,
+			wantCode:    storageError,
+		},
+		{
+			name: "search-temporalのstorage_error",
+			arguments: []string{
+				"search-temporal",
+				"--concept",
+				"channel",
+			},
+			store:       retrievalStoreStub{temporalError: errors.New("read failure")},
 			wantHandled: true,
 			wantCode:    storageError,
 		},
@@ -163,6 +189,25 @@ func TestExecuteRetrievalWithStoreDoesNotHandleUnknownOperation(t *testing.T) {
 	_, _, handled := executeRetrievalWithStore(context.Background(), command{operation: "unknown"}, retrievalStoreStub{})
 	if handled {
 		t.Fatal("未知の操作を処理済みにしました")
+	}
+}
+
+func TestExecuteRetrievalWithStoreReturnsTemporalValidationError(t *testing.T) {
+	_, executionError, handled := executeRetrievalWithStore(
+		context.Background(),
+		command{
+			operation: "search-temporal",
+			options: []option{
+				{
+					name:  "at",
+					value: "invalid",
+				},
+			},
+		},
+		retrievalStoreStub{},
+	)
+	if !handled || executionError.code != validationError || executionError.field != "at" {
+		t.Fatalf("無効な時刻の結果 = %#v, handled=%t", executionError, handled)
 	}
 }
 
@@ -443,6 +488,20 @@ func TestRetrievalResponse(t *testing.T) {
 			},
 		},
 		{
+			name: "時点検索結果",
+			value: []domain.TemporalSearchResult{{
+				AssertionID:    "asrt_01",
+				NormalizedText: "channel send",
+				Temporal: domain.Temporal{
+					ValidFrom:    &value,
+					ValidUntil:   &value,
+					VersionScope: &value,
+					ObservedAt:   &value,
+					LastVerified: &value,
+				},
+			}},
+		},
+		{
 			name:    "未知のresponse",
 			value:   "unknown",
 			wantNil: true,
@@ -571,6 +630,7 @@ type retrievalStoreStub struct {
 	getError           error
 	relatedError       error
 	contradictionError error
+	temporalError      error
 	receivedContext    *context.Context
 }
 
@@ -641,8 +701,75 @@ func (store retrievalStoreStub) SearchContradictions(ctx context.Context, _ *str
 	}}, nil
 }
 
+func (store retrievalStoreStub) SearchTemporal(ctx context.Context, _ *string, _ []domain.Scope, _ domain.TemporalSearchFilter) ([]domain.TemporalSearchResult, error) {
+	store.receive(ctx)
+	if store.temporalError != nil {
+		return nil, store.temporalError
+	}
+
+	return []domain.TemporalSearchResult{}, nil
+}
+
 func (store retrievalStoreStub) receive(ctx context.Context) {
 	if store.receivedContext != nil {
 		*store.receivedContext = ctx
 	}
+}
+
+func TestTemporalSearchFilterCanonicalizesUTC(t *testing.T) {
+	tests := []struct {
+		name      string
+		values    map[string][]string
+		wantAt    string
+		wantFrom  string
+		wantUntil string
+		wantCode  errorCode
+	}{
+		{
+			name:   "時点を正規化する",
+			values: map[string][]string{"at": {"2026-08-14T00:00:00Z"}},
+			wantAt: "2026-08-14T00:00:00.000000000Z",
+		},
+		{
+			name: "期間を正規化する",
+			values: map[string][]string{
+				"valid-from":  {"2026-08-14T00:00:00Z"},
+				"valid-until": {"2026-08-14T00:00:00.1Z"},
+			},
+			wantFrom:  "2026-08-14T00:00:00.000000000Z",
+			wantUntil: "2026-08-14T00:00:00.100000000Z",
+		},
+		{
+			name:     "時刻形式が不正",
+			values:   map[string][]string{"at": {"today"}},
+			wantCode: validationError,
+		},
+		{
+			name:     "UTCではない",
+			values:   map[string][]string{"at": {"2026-08-14T00:00:00+09:00"}},
+			wantCode: validationError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter, err := temporalSearchFilter(tt.values)
+			if err.code != tt.wantCode {
+				t.Fatalf("temporalSearchFilter() error = %q, want %q", err.code, tt.wantCode)
+			}
+			if tt.wantCode != "" {
+				return
+			}
+			if temporalFilterValue(filter.At) != tt.wantAt || temporalFilterValue(filter.ValidFrom) != tt.wantFrom || temporalFilterValue(filter.ValidUntil) != tt.wantUntil {
+				t.Fatalf("filter = %#v", filter)
+			}
+		})
+	}
+}
+
+func temporalFilterValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+
+	return *value
 }

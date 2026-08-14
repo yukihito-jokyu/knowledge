@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/yukihito-jokyu/knowledge/internal/application"
 	"github.com/yukihito-jokyu/knowledge/internal/domain"
@@ -26,6 +27,12 @@ func executeRetrievalWithStore(ctx context.Context, parsed command, store domain
 		data, err = service.SearchRelated(ctx, values["seed-kind"][0], values["seed-id"][0], values["relation-type"])
 	case "search-contradictions":
 		data, err = service.SearchContradictions(ctx, optionalValue(values, "assertion-id"), optionalValue(values, "concept"))
+	case "search-temporal":
+		filter, filterError := temporalSearchFilter(values)
+		if filterError.code != "" {
+			return nil, filterError, true
+		}
+		data, err = service.SearchTemporal(ctx, optionalValue(values, "concept"), scopeValues(values), filter)
 	default:
 		return nil, cliError{}, false
 	}
@@ -34,6 +41,46 @@ func executeRetrievalWithStore(ctx context.Context, parsed command, store domain
 	}
 
 	return retrievalResponse(data), cliError{}, true
+}
+
+const fixedTemporalTimestampLayout = "2006-01-02T15:04:05.000000000Z"
+
+func temporalSearchFilter(values map[string][]string) (domain.TemporalSearchFilter, cliError) {
+	filter := domain.TemporalSearchFilter{}
+	for _, entry := range []struct {
+		name   string
+		target **string
+	}{
+		{
+			name:   "at",
+			target: &filter.At,
+		},
+		{
+			name:   "valid-from",
+			target: &filter.ValidFrom,
+		},
+		{
+			name:   "valid-until",
+			target: &filter.ValidUntil,
+		},
+	} {
+		value := optionalValue(values, entry.name)
+		if value == nil {
+			continue
+		}
+		parsed, err := time.Parse(time.RFC3339, *value)
+		if err != nil {
+			return domain.TemporalSearchFilter{}, validationFailure(entry.name, "RFC 3339 UTC時刻を指定してください")
+		}
+		_, offset := parsed.Zone()
+		if offset != 0 {
+			return domain.TemporalSearchFilter{}, validationFailure(entry.name, "UTC時刻を指定してください")
+		}
+		canonical := parsed.UTC().Format(fixedTemporalTimestampLayout)
+		*entry.target = &canonical
+	}
+
+	return filter, cliError{}
 }
 
 func retrievalCLIError(err error) cliError {
@@ -98,6 +145,17 @@ func retrievalResponse(data any) any {
 		}
 
 		return map[string]any{"results": results}
+	case []domain.TemporalSearchResult:
+		results := make([]map[string]any, 0, len(value))
+		for _, entry := range value {
+			results = append(results, map[string]any{
+				"assertion_id":    entry.AssertionID,
+				"normalized_text": entry.NormalizedText,
+				"temporal":        temporalResponse(&entry.Temporal),
+			})
+		}
+
+		return map[string]any{"results": results}
 	default:
 		return nil
 	}
@@ -109,6 +167,20 @@ func optionalValue(values map[string][]string, name string) *string {
 	}
 
 	return &values[name][0]
+}
+
+func scopeValues(values map[string][]string) []domain.Scope {
+	keys := values["scope-key"]
+	entries := values["scope-value"]
+	scope := make([]domain.Scope, 0, len(keys))
+	for index, key := range keys {
+		scope = append(scope, domain.Scope{
+			Key:   key,
+			Value: entries[index],
+		})
+	}
+
+	return scope
 }
 
 func relatedResponse(value domain.RelatedResult) map[string]any {
