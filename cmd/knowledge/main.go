@@ -31,12 +31,12 @@ func newOSInterruptContext() (context.Context, context.CancelFunc) {
 }
 
 func run(ctx context.Context, arguments []string, stderr io.Writer) int {
-	return runWithExecutor(ctx, arguments, stderr, executeRetrieval)
+	return runWithExecutor(ctx, arguments, stderr, executeCommand)
 }
 
-type retrievalExecutor func(context.Context, command) (any, cliError, bool)
+type commandExecutionFunc func(context.Context, command) (any, cliError, bool)
 
-func runWithExecutor(ctx context.Context, arguments []string, stderr io.Writer, execute retrievalExecutor) int {
+func runWithExecutor(ctx context.Context, arguments []string, stderr io.Writer, execute commandExecutionFunc) int {
 	if ctx.Err() != nil {
 		return interruptedExitCode
 	}

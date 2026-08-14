@@ -11,6 +11,23 @@ type retrievalStoreStub struct {
 	receivedContext *context.Context
 }
 
+type createStoreStub struct {
+	receivedContext *context.Context
+	request         domain.CreateRequest
+}
+
+func (store *createStoreStub) CreateAssertion(ctx context.Context, request domain.CreateRequest) (domain.CreateResult, error) {
+	store.request = request
+	if store.receivedContext != nil {
+		*store.receivedContext = ctx
+	}
+
+	return domain.CreateResult{
+		AssertionID: "asrt_01",
+		Revision:    1,
+	}, nil
+}
+
 func (store retrievalStoreStub) SearchText(ctx context.Context, _ string) ([]domain.AssertionSummary, error) {
 	store.receive(ctx)
 
@@ -140,5 +157,24 @@ func TestRetrievalService(t *testing.T) {
 				t.Fatalf("%sのContextがStoreへ伝播しません", tt.name)
 			}
 		})
+	}
+}
+
+func TestCreateService(t *testing.T) {
+	var received context.Context
+	store := &createStoreStub{
+		receivedContext: &received,
+	}
+	service := NewCreateService(store)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	result, err := service.Create(ctx, domain.CreateRequest{
+		NormalizedText: "channel send",
+	})
+	if err != nil || result.AssertionID != "asrt_01" {
+		t.Fatalf("Create() = %#v, %v", result, err)
+	}
+	if received != ctx || store.request.NormalizedText != "channel send" {
+		t.Fatalf("Store request = %#v, context=%#v", store.request, received)
 	}
 }

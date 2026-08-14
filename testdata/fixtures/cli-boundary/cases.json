@@ -18,11 +18,27 @@
       "stderr": {"ok": false, "error": {"code": "storage_error", "message": "Knowledge Storeを開けません"}}
     }
   ],
+  "create_cases": [
+    {
+      "name": "create の最小入力",
+      "arguments": ["create", "--normalized-text", "new channel", "--evidence-kind", "user_code", "--evidence-text", "evidence", "--evidence-observed-at", "2026-08-14T00:00:00Z"],
+      "exit_code": 0,
+      "stderr": null
+    }
+  ],
   "interrupted_cases": [
     {
       "name": "migration中の割込み",
       "stage": "migration",
       "arguments": ["search-text", "--query", "channel"],
+      "exit_code": 130,
+      "stdout": "",
+      "stderr": null
+    },
+    {
+      "name": "mutation中の割込み",
+      "stage": "mutation",
+      "arguments": ["create", "--normalized-text", "interrupted", "--evidence-kind", "user_code", "--evidence-text", "evidence", "--evidence-observed-at", "2026-08-14T00:00:00Z"],
       "exit_code": 130,
       "stdout": "",
       "stderr": null
@@ -256,13 +272,6 @@
       "exit_code": 2,
       "stdout": "",
       "stderr": {"ok": false, "error": {"code": "validation_error", "message": "valid-until: valid-from以前の時刻を指定してください", "field": "valid-until"}}
-    },
-    {
-      "name": "create の最小入力",
-      "arguments": ["create", "--normalized-text", "channel", "--evidence-kind", "user_code", "--evidence-text", "evidence", "--evidence-observed-at", "2026-08-14T00:00:00Z"],
-      "exit_code": 1,
-      "stdout": "",
-      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
     },
     {
       "name": "attach-evidence の最小入力",

@@ -40,6 +40,18 @@ func TestKnowledgeCLIAtProcessBoundary(t *testing.T) {
 			assertStderr(t, stderr, testCase.Stderr)
 		})
 	}
+	createStore := defaultStoreConfiguration(t, t.TempDir())
+	prepareRetrievalDatabase(t, createStore.Path, fixture.Seed)
+	for _, testCase := range fixture.CreateCases {
+		t.Run(testCase.Name, func(t *testing.T) {
+			stdout, stderr, err := runCommand(binary, createStore.Environment, testCase.Arguments)
+			if !isExitCode(err, testCase.ExitCode) {
+				t.Fatalf("command error = %v, want exit %d", err, testCase.ExitCode)
+			}
+			assertStderr(t, stderr, testCase.Stderr)
+			assertCreateSuccess(t, stdout)
+		})
+	}
 	after, err := os.ReadFile(store.Path)
 	if err != nil {
 		t.Fatalf("検索後のStoreを読む: %v", err)
@@ -94,8 +106,12 @@ func TestKnowledgeCLICancelsAtProcessBoundary(t *testing.T) {
 	for _, testCase := range fixture.InterruptedCases {
 		t.Run(testCase.Name, func(t *testing.T) {
 			store := defaultStoreConfiguration(t, t.TempDir())
-			if testCase.Stage == "read" {
+			if testCase.Stage == "read" || testCase.Stage == "mutation" {
 				prepareRetrievalDatabase(t, store.Path, fixture.Seed)
+			}
+			before := 0
+			if testCase.Stage == "mutation" {
+				before = assertionCount(t, store.Path)
 			}
 			stdout, stderr, err := runInterruptedCommand(t, binary, store.Environment, testCase.Arguments, testCase.Stage)
 			if !isExitCode(err, testCase.ExitCode) {
@@ -106,12 +122,16 @@ func TestKnowledgeCLICancelsAtProcessBoundary(t *testing.T) {
 			if testCase.Stage == "migration" {
 				assertMigrationRolledBack(t, store.Path)
 			}
+			if testCase.Stage == "mutation" && assertionCount(t, store.Path) != before {
+				t.Fatal("中断されたmutationがAssertionを残しました")
+			}
 		})
 	}
 }
 
 type cliFixture struct {
 	Cases             []cliFixtureCase `json:"cases"`
+	CreateCases       []cliFixtureCase `json:"create_cases"`
 	EmptyStoreCases   []cliFixtureCase `json:"empty_store_cases"`
 	StoreFailureCases []cliFixtureCase `json:"store_failure_cases"`
 	InterruptedCases  []cliFixtureCase `json:"interrupted_cases"`
@@ -143,11 +163,49 @@ func readFixture(t *testing.T) cliFixture {
 	if fixture.Seed == "" {
 		t.Fatal("fixtureにseedがありません")
 	}
-	if len(fixture.EmptyStoreCases) == 0 || len(fixture.StoreFailureCases) == 0 || len(fixture.InterruptedCases) == 0 {
+	if len(fixture.CreateCases) == 0 || len(fixture.EmptyStoreCases) == 0 || len(fixture.StoreFailureCases) == 0 || len(fixture.InterruptedCases) == 0 {
 		t.Fatal("既定Storeのfixtureがありません")
 	}
 
 	return fixture
+}
+
+func assertCreateSuccess(t *testing.T, source string) {
+	t.Helper()
+	var response struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			AssertionID string   `json:"assertion_id"`
+			Revision    int      `json:"revision"`
+			EvidenceIDs []string `json:"evidence_ids"`
+			Concepts    []struct {
+				ID   string `json:"concept_id"`
+				Name string `json:"name"`
+			} `json:"concepts"`
+			RelationIDs []string `json:"relation_ids"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(source), &response); err != nil {
+		t.Fatalf("create stdout JSONを復号する: %v", err)
+	}
+	if !response.OK || response.Data.AssertionID == "" || response.Data.Revision != 1 || len(response.Data.EvidenceIDs) == 0 {
+		t.Fatalf("create response = %#v", response)
+	}
+}
+
+func assertionCount(t *testing.T, databasePath string) int {
+	t.Helper()
+	database, err := sql.Open("sqlite", databasePath)
+	if err != nil {
+		t.Fatalf("Assertion確認用Storeを開く: %v", err)
+	}
+	defer database.Close()
+	var count int
+	if err := database.QueryRowContext(context.Background(), "SELECT count(*) FROM assertions").Scan(&count); err != nil {
+		t.Fatalf("Assertion数を読む: %v", err)
+	}
+
+	return count
 }
 
 func buildCLI(t *testing.T, integrationTest bool) string {

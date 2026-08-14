@@ -12,6 +12,21 @@ type RetrievalService struct {
 	store domain.RetrievalStore
 }
 
+// CreateService は作成操作を実行する。
+type CreateService struct {
+	store domain.CreateStore
+}
+
+// NewCreateService は作成操作のサービスを作る。
+func NewCreateService(store domain.CreateStore) CreateService {
+	return CreateService{store: store}
+}
+
+// Create はAssertion初版を作成する。
+func (s CreateService) Create(ctx context.Context, request domain.CreateRequest) (domain.CreateResult, error) {
+	return s.store.CreateAssertion(ctx, request)
+}
+
 // NewRetrievalService は読取操作のサービスを作る。
 func NewRetrievalService(store domain.RetrievalStore) RetrievalService {
 	return RetrievalService{

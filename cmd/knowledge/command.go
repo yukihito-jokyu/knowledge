@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -20,6 +21,39 @@ type cliError struct {
 	code    errorCode
 	message string
 	field   string
+}
+
+// commandExecutor はparse済みの操作を実行する。
+type commandExecutor interface {
+	Execute(context.Context, command) (any, cliError)
+}
+
+type commandExecutorFunc func(context.Context, command) (any, cliError)
+
+func (function commandExecutorFunc) Execute(ctx context.Context, parsed command) (any, cliError) {
+	return function(ctx, parsed)
+}
+
+var commandExecutors = map[string]commandExecutor{
+	"create":                commandExecutorFunc(executeCreate),
+	"search-text":           commandExecutorFunc(executeRetrievalCommand),
+	"search-concept":        commandExecutorFunc(executeRetrievalCommand),
+	"search-related":        commandExecutorFunc(executeRetrievalCommand),
+	"get":                   commandExecutorFunc(executeRetrievalCommand),
+	"get-evidence":          commandExecutorFunc(executeRetrievalCommand),
+	"search-contradictions": commandExecutorFunc(executeRetrievalCommand),
+	"search-temporal":       commandExecutorFunc(executeRetrievalCommand),
+}
+
+func executeCommand(ctx context.Context, parsed command) (any, cliError, bool) {
+	executor, ok := commandExecutors[parsed.operation]
+	if !ok {
+		return nil, cliError{}, false
+	}
+
+	data, err := executor.Execute(ctx, parsed)
+
+	return data, err, true
 }
 
 func (e cliError) Error() string {
@@ -270,6 +304,9 @@ func hasPreviousConcept(options []option, index int) bool {
 		if options[position].name == "concept" {
 			return true
 		}
+		if options[position].name != "concept-alias" {
+			return false
+		}
 	}
 
 	return false
@@ -409,12 +446,28 @@ func validateConceptGroups(values map[string][]string) cliError {
 		return err
 	}
 
-	return validateUnique(values["concept-alias"], "concept-alias", "Concept Aliasを重複指定できません")
+	if err := validateUnique(values["concept-alias"], "concept-alias", "Concept Aliasを重複指定できません"); err.code != "" {
+		return err
+	}
+	names := make(map[string]bool, len(values["concept"]))
+	for _, name := range values["concept"] {
+		names[name] = true
+	}
+	for _, alias := range values["concept-alias"] {
+		if names[alias] {
+			return validationFailure("concept-alias", "Concept名とConcept Aliasを重複指定できません")
+		}
+	}
+
+	return cliError{}
 }
 
 func validateAliasGroups(values map[string][]string) cliError {
 	kinds := values["alias-kind"]
 	entries := values["alias-value"]
+	if len(kinds) != len(entries) {
+		return validationFailure("alias", "Assertion Alias groupを完全に指定してください")
+	}
 	seen := make(map[string]bool)
 	for index, kind := range kinds {
 		if !oneOf(kind, "api_name", "identifier") {
@@ -433,6 +486,10 @@ func validateAliasGroups(values map[string][]string) cliError {
 func validateRelationGroups(values map[string][]string) cliError {
 	types := values["relation-type"]
 	kinds := values["relation-target-kind"]
+	ids := values["relation-target-id"]
+	if len(types) != len(kinds) || len(types) != len(ids) {
+		return validationFailure("relation", "Relation groupを完全に指定してください")
+	}
 	for index, relationType := range types {
 		if !oneOf(relationType, "related_to", "prerequisite", "causes", "contributes_to", "contradicts") {
 			return validationFailure("relation-type", "許可されていないRelation種別です")
