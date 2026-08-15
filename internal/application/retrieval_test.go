@@ -16,6 +16,20 @@ type createStoreStub struct {
 	request         domain.CreateRequest
 }
 
+type historyStoreStub struct{}
+
+func (historyStoreStub) AttachEvidence(context.Context, domain.AttachEvidenceRequest) (domain.AttachEvidenceResult, error) {
+	return domain.AttachEvidenceResult{AssertionID: "asrt_01"}, nil
+}
+
+func (historyStoreStub) ReviseAssertion(context.Context, domain.ReviseRequest) (domain.ReviseResult, error) {
+	return domain.ReviseResult{Revision: 2}, nil
+}
+
+func (historyStoreStub) Supersede(context.Context, domain.SupersedeRequest) (domain.SupersedeResult, error) {
+	return domain.SupersedeResult{RelationID: "rel_01"}, nil
+}
+
 func (store *createStoreStub) CreateAssertion(ctx context.Context, request domain.CreateRequest) (domain.CreateResult, error) {
 	store.request = request
 	if store.receivedContext != nil {
@@ -176,5 +190,18 @@ func TestCreateService(t *testing.T) {
 	}
 	if received != ctx || store.request.NormalizedText != "channel send" {
 		t.Fatalf("Store request = %#v, context=%#v", store.request, received)
+	}
+}
+
+func TestHistoryService(t *testing.T) {
+	service := NewHistoryService(historyStoreStub{})
+	if result, err := service.AttachEvidence(context.Background(), domain.AttachEvidenceRequest{}); err != nil || result.AssertionID != "asrt_01" {
+		t.Fatalf("AttachEvidence() = %#v, %v", result, err)
+	}
+	if result, err := service.Revise(context.Background(), domain.ReviseRequest{}); err != nil || result.Revision != 2 {
+		t.Fatalf("Revise() = %#v, %v", result, err)
+	}
+	if result, err := service.Supersede(context.Background(), domain.SupersedeRequest{}); err != nil || result.RelationID != "rel_01" {
+		t.Fatalf("Supersede() = %#v, %v", result, err)
 	}
 }
