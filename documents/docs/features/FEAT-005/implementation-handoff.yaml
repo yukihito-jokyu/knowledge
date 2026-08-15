@@ -1,6 +1,6 @@
 feature: FEAT-005
 name: 知識評価の品質保証
-planning_status: draft
+planning_status: ready
 
 design_readiness:
   audited_by: task-breakdown
@@ -16,15 +16,15 @@ design_readiness:
       status: complete
       evidence: docs/features/FEAT-005/design/scenario-catalog.md
     migration:
-      status: not_applicable
-      evidence: 新規または変更する永続schema・migrationはない。
+      status: complete
+      evidence: DEC-FEAT-020によりEvidence単位Temporal metadataを非破壊migrationで追加し、V1 Storeからの移行と欠損schema拒否を検証する。
     fixtures:
       status: complete
       evidence: docs/features/FEAT-005/design/scenario-catalog.md
   format_schemas:
     relational_ddl:
-      status: not_applicable
-      evidence: Store schemaを追加・変更せず、既存Storeをcaseごとの一時領域で観測する。
+      status: complete
+      evidence: DEC-FEAT-020によりevidence_temporal_metadataとIndexを追加し、既存Evidenceとの読出し互換性を維持する。
     json_operations:
       status: complete
       evidence: docs/features/FEAT-001/design/command-catalog.md および docs/features/FEAT-001/design/commands/
@@ -39,7 +39,7 @@ design_readiness:
     status: complete
     command_catalog: docs/features/FEAT-001/design/command-catalog.md
     operation_contracts: docs/features/FEAT-001/design/commands/
-    evidence: FEAT-005は既存CLIを観測するため、利用するoperationのI/O・error・exit code・transactionはFEAT-001資料を参照する。新operationは追加しない。
+    evidence: FEAT-005は既存CLIを観測するため、利用するoperationのI/O・error・exit code・transactionはFEAT-001資料を参照する。新operationは追加せず、DEC-FEAT-020の既存get-evidence任意temporal表示だけを追加する。
   independent_design_review:
     status: complete
     reviewer: design-review
@@ -51,11 +51,11 @@ design_readiness:
     approved_by: human
     evidence: .ai/workflow/state.yaml#features.FEAT-005.human_design_review
   implementation_readiness_review:
-    status: pending
-    reviewer: pending
-    reviewed_by: pending
+    status: complete
+    reviewer: implementation-readiness-review
+    reviewed_by: independent_subagent
     repository_overview: parent repository root (/Users/yukihito/Documents/github_projects/knowledge)
-    result: pending
+    result: pass
     evidence: docs/features/FEAT-005/tasks.md#implementation-readiness-review
     scope:
       - AGENTS.md
@@ -86,12 +86,16 @@ nonfunctional_requirements:
   - NFR-006
 
 implementation_deliverables:
-  root: parent repository test areas
+  root: parent repository test areas and DEC-FEAT-019/020 approved implementation exceptions
   items:
     - path: testdata/fixtures/
       responsibility: Scenario A〜Jと派生Xの固定入力、隔離Store seed、期待oracle、Store差分。
     - path: test/integration/
-      responsibility: 実knowledge binaryと隔離SQLite Storeを使うプロセス境界の観測。
+      responsibility: 実knowledge binaryと隔離SQLite Storeを使うプロセス境界の観測、およびDEC-FEAT-021の明示起動Runtime受入launcher。
+    - path: internal/persistence/sqlite/
+      responsibility: DEC-FEAT-019のintegrationtest限定中断gateと、DEC-FEAT-020のEvidence Temporal migration・Store read。
+    - path: cmd/knowledge/
+      responsibility: DEC-FEAT-020の既存get-evidence Evidence任意temporal表示。
   dependencies:
     - path: docs/features/FEAT-001/implementation-handoff.yaml
       responsibility: 既存Knowledge CLIのoperation・JSON・SQLite契約。
@@ -102,10 +106,9 @@ implementation_deliverables:
     - path: docs/features/FEAT-004/implementation-handoff.yaml
       responsibility: Knowledge Acquisition／Updateの契約。
   excluded_locations:
-    - cmd/knowledge/
-    - internal/
-    - SQLite migration
-    - Knowledge CLIの公開operation・JSON
+    - 新しいKnowledge CLI operation
+    - DEC-FEAT-020以外のSQLite migration
+    - DEC-FEAT-020以外のKnowledge CLI公開JSON
     - 公開設定
 
 logical_areas:
@@ -146,7 +149,7 @@ acceptance_criteria:
   - F／GではCandidate、Decision、CLI mutation、Store差分がなく、Hでは訂正前のEvidence・revision・Relationを保持して訂正後のEvidence・revisionを追加する。
   - A〜E、H、I、Jでは既存Search Trace契約を確認し、A／G／I／Jの`reading_value_reference`がFEAT-003の指定節へ一意に遡れることを確認する。
   - 技術失敗Xと中断Xを実CLIプロセス境界で確認し、成功のAssessment／推奨へ変換せず後続を実行しない。
-  - 新しい製品公開契約、CLI operation、DB schema、migration、公開設定を追加・変更しない。
+  - 新operation、公開設定、既存Workflowの業務規則は追加・変更しない。DEC-FEAT-019のintegrationtest限定同期gateとDEC-FEAT-020のEvidence Temporal migration・既存get-evidence任意temporal表示だけを変更できる。
 
 constraints:
   - Fixtureはテスト専用であり、実ユーザーStore、外部記事、認証情報、既定Store、共有Storeを使用しない。
@@ -157,11 +160,17 @@ constraints:
 decisions:
   - id: DEC-FEAT-016
     source: docs/features/FEAT-005/decisions/DEC-FEAT-016.md
+  - id: DEC-FEAT-019
+    source: docs/features/FEAT-005/decisions/DEC-FEAT-019.md
+  - id: DEC-FEAT-020
+    source: docs/features/FEAT-005/decisions/DEC-FEAT-020.md
+  - id: DEC-FEAT-021
+    source: docs/features/FEAT-005/decisions/DEC-FEAT-021.md
 
 interfaces_and_contracts:
   - Fixtureはcase ID、固定入力、Store seed、期待層別oracle、期待Store差分、契約参照を持ち、単層実行とEnd-to-End実行は同じcase IDを共有する。
   - Case Resultは照合順に最初の不一致層、根拠参照、後続未実行層またはnot_run理由を記録する。
-  - CLI／Storeのargv、stdout、stderr、exit code、実行順、mutation数、履歴差分は既存FEAT-001公開契約を観測する。
+  - CLI／Storeのargv、stdout、stderr、exit code、実行順、mutation数、履歴差分は既存FEAT-001公開契約を観測する。DEC-FEAT-020のget-evidence Evidence `temporal`は存在時だけ表示し、値なしEvidenceの既存JSON形状を維持する。
   - Search／Trace、Candidate／Update ResultはFEAT-002およびFEAT-004の既存契約を観測する。A／G／I／JのReading ValueはFEAT-003の指定節を参照するだけで、実行結果を観測しない。
 
 contract_artifacts:
@@ -187,7 +196,7 @@ contract_artifacts:
     source: .ai/workflow/state.yaml#features.FEAT-005.human_design_review
 
 out_of_scope:
-  - Knowledge CLIのcmd/knowledge/、internal/、SQLite schema・migration、公開CLI JSON、公開設定の追加・変更。
+  - 新しいKnowledge CLI operation、DEC-FEAT-020以外のSQLite schema・migration／公開CLI JSON、公開設定の追加・変更。DEC-FEAT-019の`internal/persistence/sqlite/` integrationtest限定同期gate、ならびにDEC-FEAT-020のEvidence Temporal migration・Store read・既存get-evidenceの任意temporal表示を除く。
   - 外部記事サイトへのライブアクセス、実ユーザー情報、性能ベンチマーク、一般的な記事品質評価。
   - 検索・Evidence分類・更新・Reading Valueの業務規則を変更すること。
   - Fixture外の自動再実行、補償削除、再開ledger、製品UI/APIの追加。
@@ -196,4 +205,4 @@ implementation_notes:
   - TASK-005-01でcase IDと隔離Fixtureを固定し、TASK-005-02とTASK-005-03が責務境界ごとのoracleを消費し、TASK-005-04でプロセス境界の横断受入を完成する。
   - 固定済みの配置以外の実装組織化、symbol、フレームワーク、ライブラリはImplementation領域で既存基盤に従って決める。
   - Goを変更する実装ではgofmt、go test ./...、go vet ./...を実行する。CLI／SQLiteを観測するcaseはtest/integration/の実プロセス境界で検証する。
-  - 配置修正後に独立設計レビュー、利用者承認、実装可能性レビューを再実施するまで、handoffをreadyにしない。
+  - DEC-FEAT-019反映後に独立設計レビュー、利用者承認、実装可能性レビューを再実施するまで、handoffをreadyにしない。

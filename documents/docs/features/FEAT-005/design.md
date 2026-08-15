@@ -6,7 +6,7 @@ Scenario A〜Jを、既存のKnowledge CLI、Knowledge Search、Knowledge Acquis
 
 ## Scope / Out of Scope
 
-対象と対象外は[requirements.md](requirements.md)に従う。特に、本Featureは既存CLIとKnowledge Search／Knowledge Acquisition／Knowledge Updateの既存契約を**消費・観測するだけ**であり、Reading Valueは既存FEAT-003検証契約を参照する。公開CLI、SQLite schema・migration、保存先、公開設定、検索・更新・推奨の業務規則を変更しない。
+対象と対象外は[requirements.md](requirements.md)に従う。特に、本Featureは既存CLIとKnowledge Search／Knowledge Acquisition／Knowledge Updateの既存契約を**消費・観測するだけ**であり、Reading Valueは既存FEAT-003検証契約を参照する。公開CLI operation、保存先、公開設定、検索・更新・推奨の業務規則を変更しない。ただし[DEC-FEAT-020](decisions/DEC-FEAT-020.md)により、Evidence単位の任意Temporal metadataを保存するSQLite migrationと、既存`get-evidence`応答の省略可能な`temporal`表示だけを追加する。
 
 ## Related Requirements / Business Rules
 
@@ -63,13 +63,15 @@ Scenario A〜Jを、既存のKnowledge CLI、Knowledge Search、Knowledge Acquis
 
 ## Implementation Deliverables / Placement
 
-親リポジトリの既存配置と`AGENTS.md`を根拠に、実装成果物はテスト専用領域に限る。`documents/`配下は正規設計資料であり、製品実装先ではない。既存Workflow Skillは検証の**被観測対象**であり、通常利用時のコンテキストを増やさないため変更しない。
+親リポジトリの既存配置と`AGENTS.md`を根拠に、実装成果物はテスト専用領域を主とする。DEC-FEAT-019／020で許可したSQLite test gate・Evidence Temporal migration／Store read・既存`get-evidence`の任意表示だけは製品実装先に置く。`documents/`配下は正規設計資料であり、製品実装先ではない。既存Workflow Skillは検証の**被観測対象**であり、通常利用時のコンテキストを増やさないため変更しない。
 
 | Root-relative placement | 責務 | 依存 | 変更しない領域 |
 | --- | --- | --- | --- |
-| `testdata/fixtures/` 配下のFEAT-005用Fixture領域 | Scenario A〜Jの固定入力、seed参照、期待成果物・差分を保持する。 | 既存`testdata/fixtures/cli-boundary/`のJSON Fixture慣行、各Feature契約。 | 実ユーザーStore、外部記事本文、認証情報。 |
+| `testdata/fixtures/acceptance/knowledge-quality/` | Scenario A〜Jの固定入力、seed参照、期待成果物・差分を保持する。 | 既存`testdata/fixtures/cli-boundary/`のJSON Fixture慣行、各Feature契約。 | 実ユーザーStore、外部記事本文、認証情報。 |
 | 同Fixture領域のRuntime評価指示 | A〜J／Xのcase ID、渡す固定Claim／Episode、読み込む既存Skill、必須の一時Markdown成果物、Case Resultへの観測項目を定義する。 | FEAT-002／004の既存Workflow契約。 | 実行用Skill本文、通常利用の指示、公開I/O、Reading Value。 |
-| `test/integration/` | 実`knowledge` binary、隔離SQLite Store、stdout/stderr、exit code、履歴・差分をプロセス境界で観測する。 | 既存integration testとFEAT-001 CLI契約。 | `cmd/knowledge/`、`internal/`、migration、公開CLI。 |
+| `test/integration/` | 実`knowledge` binary、隔離SQLite Store、stdout/stderr、exit code、履歴・差分をプロセス境界で観測する。 | 既存integration testとFEAT-001 CLI契約、DEC-FEAT-020。 | 新operation、保存先、公開設定。 |
+| `internal/persistence/sqlite/` の`integrationtest`限定同期gate | `FEAT005-X-SEARCH-CANCELED`で、最初の`search-text`開始後・response開始前にSIGINTを送る時点だけを同期する。 | 既存のtest-only中断gateとDEC-FEAT-019。 | 通常binary、公開CLI、SQLite schema・migration、通常の検索挙動、公開設定。 |
+| `internal/persistence/sqlite/` のEvidence Temporal migration | `evidence_temporal_metadata`を非破壊で追加し、Evidence ID単位の任意Temporalを読出す。 | DEC-FEAT-020。 | 既存Evidence、既存operation、保存先、公開設定。 |
 
 新しい実行可能成果物の詳細な組織化、symbol、test framework APIはImplementation領域で既存のGo／Fixture慣行に従う。本Featureは`testdata/fixtures/`と`test/integration/`が既に存在すること、検証対象のWorkflowが親リポジトリの`skills/`に存在することを確認済みである。
 
@@ -187,24 +189,24 @@ Fixtureは公開JSON APIではないが、再現性のため以下の論理項�
 | 永続データまたは履歴 | complete | 本Featureは製品データを追加しない。隔離Storeのseed、更新差分、履歴非削除をFixtureの期待値として明示する。 |
 | 検索・取得 | complete | Scenario A〜E、Hは既存CLI／Knowledge Searchを使い、状態・Trace・空結果・停止を上記Fixture契約で明示する。 |
 | 更新・重複 | complete | F／Gは更新ゼロ、Hは訂正と履歴保持、既存Update契約の重複・部分適用・競合を参照する。 |
-| Command / CLI / API | not_applicable | 新operation・公開wire契約を追加しない。既存11 operationはFEAT-001を参照する。 |
-| Schema / Store / Index変更 | not_applicable | 製品schema、migration、Indexを追加・変更しない。test Storeは既存schemaをcaseごとに初期化する。 |
+| Command / CLI / API | complete | 新operationは追加しない。DEC-FEAT-020により既存`get-evidence`のEvidenceへ任意`temporal`を表示し、値なしEvidenceの既存response形状を維持する。 |
+| Schema / Store / Index変更 | complete | DEC-FEAT-020により`evidence_temporal_metadata`とIndexを非破壊migrationで追加し、V1 Storeから現行schemaへの移行と欠損schema拒否を検証する。 |
 | テストFixture | complete | Fixture入力、期待oracle、case result、Scenario A〜Jの対応を本書で固定する。 |
 
 ## Physical / Wire Schema
 
-SQLite DDLおよび公開JSON wire schemaの追加・変更は`not_applicable`である。本Featureは既存のSQLite schemaとFEAT-001の既存CLI JSONをそのまま観測する。
+DEC-FEAT-020により、SQLite DDLへ`evidence_temporal_metadata`とそのIndexを追加する。`get-evidence`の各EvidenceにはTemporalがある場合だけ`temporal`を追加し、既存の値なしEvidenceのJSON形状は維持する。新operationや他のwire contractは追加・変更しない。
 
 テストFixtureの物理エンコードは公開契約ではない。ただし、[Interfaces / Data](#interfaces--data)の論理項目、各Scenarioの期待値、隔離と再現性は必ず満たす。既存FixtureがJSONを採用しているためJSONを既定とするが、これはテストデータのL2選択であり、CLI wire schemaを拡張しない。
 
 ## Operation Documentation
 
-Operation Documentation Coverage Gateは`not_applicable`である。新しいJSON CLI／API operationやStore operationを提供しない。参照する既存operationの入力、成功・error JSON、exit code、DB接続、transactionは[FEAT-001 Command Catalog](../FEAT-001/design/command-catalog.md)と各operation資料が正規根拠である。
+新しいJSON CLI／API operationは提供しない。DEC-FEAT-020で変更する`get-evidence`の任意Evidence `temporal`は、既存operationの読出し互換性を維持しつつ実プロセス境界で検証する。その他の入力、成功・error JSON、exit code、DB接続、transactionは[FEAT-001 Command Catalog](../FEAT-001/design/command-catalog.md)と各operation資料が正規根拠である。
 
 ## Error / Edge Cases
 
 - 空Store、一致なし、`no_evidence`は成功の未知証明ではない。Scenario AおよびJでその禁止断定を確認する。
-- CLIの`validation_error`、`not_found`、`storage_error`、`internal_error`、JSONプロトコル不整合は`technical_failure`、response開始前のexit 130・無出力は`canceled`として、Assessmentや推奨を作らない。
+- CLIの`validation_error`、`not_found`、`storage_error`、`internal_error`、JSONプロトコル不整合は`technical_failure`、response開始前のexit 130・無出力は`canceled`として、Assessmentや推奨を作らない。`FEAT005-X-SEARCH-CANCELED`はDEC-FEAT-019のtest-only同期gateで`search-text`開始後に中断する。
 - Search TraceはKnowledge Searchを実行したcaseでだけ必須にする。F／Gの更新禁止caseに架空のTraceを要求しない。
 - Scenario F（質問）とG（AI説明）は、Candidate、Decision、CLI mutation、Store差分がいずれもないことを確認する。GのURL評価が正常完了しても、記事・Assessment・AI回答をEvidence化しない。
 - Scenario Hは訂正前のEvidence、旧revision、既存Relationを削除せず、訂正後Evidenceと現行評価を追跡できることを確認する。
@@ -271,7 +273,10 @@ Operation Documentation Coverage Gateは`not_applicable`である。新しいJSO
 - [DEC-FEAT-016](decisions/DEC-FEAT-016.md): 固定Fixtureと層別oracleを採用する。
 - [DEC-FEAT-017](decisions/DEC-FEAT-017.md): 自動CLI境界とRuntime受入評価を分離する。
 - [DEC-FEAT-018](decisions/DEC-FEAT-018.md): Reading Valueは既存検証契約への参照に限定する。
-- 既存のCLI、Store、Workflow契約は変更せず参照する。
+- [DEC-FEAT-019](decisions/DEC-FEAT-019.md): `search-text`の中断をtest-only同期gateで再現する。
+- [DEC-FEAT-020](decisions/DEC-FEAT-020.md): Evidence単位Temporalの非破壊永続化と`get-evidence`の任意表示を許可する。
+- [DEC-FEAT-021](decisions/DEC-FEAT-021.md): 明示起動だけを受けるテスト専用Runtime受入launcherを置く。
+- 既存のCLI operation、Workflow契約は変更せず参照する。
 
 ## Open Issues
 

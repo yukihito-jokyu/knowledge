@@ -2,7 +2,7 @@
 
 ## 固定方法
 
-全caseは `testdata/fixtures/acceptance/feat005/cases.json` の一意な`case_id`として実装する。ここに示すseed ID、入力ID、期待oracle、Store差分、参照契約は変更しない。JSONの入れ子やtest helperの構造はImplementation領域が選ぶが、同じcase IDへ別の入力や合否規則を割り当ててはならない。
+全caseは `testdata/fixtures/acceptance/knowledge-quality/cases.json` の一意な`case_id`として実装する。ここに示すseed ID、入力ID、期待oracle、Store差分、参照契約は変更しない。JSONの入れ子やtest helperの構造はImplementation領域が選ぶが、同じcase IDへ別の入力や合否規則を割り当ててはならない。
 
 同じFixture領域に、Runtime受入評価の指示を置く。この指示は、選択`case_id`、渡す固定Claim／Episode、呼び出す既存Skill、必須の一時Markdown成果物、Case Resultへ写すoracleを定義する。Reading Valueへ固定Article Analysisを渡さず、A／G／I／Jは既存FEAT-003検証契約の節を`reading_value_reference`として参照する。通常のSkill本文へCase固有情報を追記せず、Runtime評価の成果物は呼出しsession内だけに保持する。自動CLI境界とRuntime受入評価の分離は[DEC-FEAT-017](../decisions/DEC-FEAT-017.md)を正とする。
 
