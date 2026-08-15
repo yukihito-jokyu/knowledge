@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -76,7 +77,8 @@ func runRuntimeAcceptance(t *testing.T, binary string, store defaultStore, testC
 	prompt := "これはFEAT-005のテスト専用Runtime受入評価です。repositoryを変更せず、与えた隔離Storeだけを使ってください。最初に次の既存Skillを読み、その通常契約に従って評価してください: " + strings.Join(runtimeSkillPaths(testCase), ", ") + "。Reading Value、外部URL、共有Storeは使わないでください。指定したknowledge binaryを実際に呼び、必要なCLI操作とWorkflow判断を観測してください。\n" +
 		"最終回答はJSONだけにし、case_id、execution_mode=runtime_acceptance、status=pass/failed/not_run、executed_layers、first_mismatch_layer、assessment、confidence、trace_stop、assessments、candidate_ids、update_status、cli_operations、partial_trace_stop、markdownを必ず含めてください。markdownには今回の一時評価Markdownを文字列で入れてください。\n" +
 		"case_id: " + testCase.CaseID + "\ninput: " + string(testCase.Input) + "\nexpected CLI arguments: " + strings.Join(testCase.Expected.CLI.Arguments, " ") + "\nexpected operations: " + strings.Join(testCase.Expected.Operations, ",") + "\nknowledge binary: " + runtimeBinary + "\n"
-	cmd := exec.Command("codex", "exec", "--ephemeral", "-s", "workspace-write", "--add-dir", filepath.Dir(store.Path), "-C", filepath.Clean("../.."), "-o", output, prompt)
+	// #nosec G204 -- 全引数はfixture、テストが生成した隔離パス、または固定値である。
+	cmd := exec.CommandContext(context.Background(), "codex", "exec", "--ephemeral", "-s", "workspace-write", "--add-dir", filepath.Dir(store.Path), "-C", filepath.Clean("../.."), "-o", output, prompt)
 	t.Logf("Codex Runtime起動: case=%s skills=%s binary=%s", testCase.CaseID, strings.Join(runtimeSkillPaths(testCase), ","), runtimeBinary)
 	combined, err := cmd.CombinedOutput()
 	if len(combined) > 0 {
@@ -94,6 +96,7 @@ func runRuntimeAcceptance(t *testing.T, binary string, store defaultStore, testC
 		t.Fatalf("Runtime Case ResultがJSONではありません: %v: %s", err, content)
 	}
 	t.Logf("Runtime Case Result: %s", content)
+
 	return result
 }
 
@@ -109,6 +112,7 @@ func runtimeSkillPaths(testCase qualityCase) []string {
 			paths = append(paths, "skills/knowledge-update/SKILL.md")
 		}
 	}
+
 	return paths
 }
 
@@ -119,6 +123,7 @@ func runtimeStoreBinary(t *testing.T, binary string, store defaultStore, testCas
 	for _, entry := range store.Environment {
 		if key, value, found := strings.Cut(entry, "="); found && (key == "HOME" || key == "APPDATA" || key == "XDG_CONFIG_HOME") {
 			assignment = key + "='" + strings.ReplaceAll(value, "'", "'\\''") + "'\n"
+
 			break
 		}
 	}
@@ -146,9 +151,11 @@ func runtimeStoreBinary(t *testing.T, binary string, store defaultStore, testCas
 	} else if testCase.CaseID != "FEAT005-X-SEARCH-TECHNICAL-FAILURE" {
 		script += "exec '" + strings.ReplaceAll(binary, "'", "'\\''") + "' \"$@\"\n"
 	}
+	// #nosec G306 -- 実行可能なテスト用wrapperであり、親TempDirは0700で隔離される。
 	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
+
 	return path
 }
 
@@ -184,6 +191,7 @@ func runtimeAssessmentOf(t *testing.T, raw json.RawMessage) runtimeAssessment {
 	if err := json.Unmarshal(raw, &value.Status); err != nil {
 		t.Fatalf("Runtime assessmentを読む: %v", err)
 	}
+
 	return value
 }
 
@@ -200,6 +208,7 @@ func runtimeAssessments(t *testing.T, raw json.RawMessage) map[string]string {
 	for _, value := range values {
 		result[value.AssertionID] = value.Status
 	}
+
 	return result
 }
 
@@ -213,6 +222,7 @@ func runtimeOperationNames(t *testing.T, raw json.RawMessage) []string {
 	for _, value := range values {
 		result = append(result, value.Operation)
 	}
+
 	return result
 }
 
@@ -221,5 +231,6 @@ func normalizeRuntimeValue(value string) string {
 	if normalized == "no_viable_path" {
 		return "no_expandable_path"
 	}
+
 	return normalized
 }

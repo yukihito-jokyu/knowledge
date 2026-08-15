@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -134,16 +135,19 @@ func runQualityCase(t *testing.T, binary string, store defaultStore, c qualityCa
 		}
 		assertStdout(t, stdout, "")
 		assertQualityErrorCode(t, stderr, c.Expected.CLI.ErrorCode)
+
 		return
 	}
 	if c.CaseID == "FEAT005-H-UPDATE-CORRECTION" {
 		assertQualityCorrection(t, binary, store, c)
+
 		return
 	}
 	var stdout, stderr string
 	var err error
 	if len(c.Expected.CLI.Arguments) == 0 {
 		assertNoCandidateEpisode(t, c)
+
 		return
 	}
 	if c.CaseID == "FEAT005-X-SEARCH-CANCELED" {
@@ -157,6 +161,7 @@ func runQualityCase(t *testing.T, binary string, store defaultStore, c qualityCa
 	if c.Expected.CLI.ExitCode == 130 {
 		assertStdout(t, stdout, "")
 		assertStderr(t, stderr, nil)
+
 		return
 	}
 	assertStderr(t, stderr, nil)
@@ -174,11 +179,15 @@ func assertQualityEvidenceTemporal(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	rows, err := db.Query("SELECT evidence_id, version_scope FROM evidence_temporal_metadata ORDER BY evidence_id")
+	rows, err := db.QueryContext(context.Background(), "SELECT evidence_id, version_scope FROM evidence_temporal_metadata ORDER BY evidence_id")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	got := map[string]string{}
 	for rows.Next() {
 		var id, version string
@@ -240,6 +249,7 @@ func assertFixtureOracle(t *testing.T, c qualityCase) {
 		if c.Expected.PartialTrace.Operation != "search-text" || c.Expected.PartialTrace.Stop == "" || !reflect.DeepEqual(c.Expected.NotExecuted, []string{"assessment", "knowledge_acquisition", "knowledge_update"}) {
 			t.Fatalf("X partial traceが不正: %#v", c.Expected.PartialTrace)
 		}
+
 		return
 	}
 	if c.Expected.Assessment != "" && (c.Expected.Confidence == "" || c.Expected.TraceStop == "") {
@@ -324,6 +334,7 @@ func assertQualityCorrection(t *testing.T, binary string, store defaultStore, c 
 			if !qualityRevisionExists(t, store.Path, "as-h", 1) {
 				t.Fatal("保持revisionが消失")
 			}
+
 			continue
 		}
 		if !after.IDs[id] {
@@ -349,9 +360,10 @@ func qualityRevisionExists(t *testing.T, path, assertionID string, revision int)
 	}
 	defer db.Close()
 	var count int
-	if err := db.QueryRow("SELECT count(*) FROM assertion_revisions WHERE assertion_id = ? AND revision = ?", assertionID, revision).Scan(&count); err != nil {
+	if err := db.QueryRowContext(context.Background(), "SELECT count(*) FROM assertion_revisions WHERE assertion_id = ? AND revision = ?", assertionID, revision).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
+
 	return count == 1
 }
 
@@ -368,54 +380,68 @@ func qualityStateOf(t *testing.T, path string) qualityState {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	state := qualityState{map[string]bool{}, map[string]int{}, map[string]int{}}
-	rows, err := db.Query("SELECT assertion_id, current_revision FROM assertions")
+	state := qualityState{IDs: map[string]bool{}, Revisions: map[string]int{}, Evidence: map[string]int{}}
+	assertionRows, err := db.QueryContext(context.Background(), "SELECT assertion_id, current_revision FROM assertions")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for rows.Next() {
+	defer func() {
+		if err := assertionRows.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	for assertionRows.Next() {
 		var id string
 		var revision int
-		if err := rows.Scan(&id, &revision); err != nil {
+		if err := assertionRows.Scan(&id, &revision); err != nil {
 			t.Fatal(err)
 		}
 		state.IDs[id] = true
 		state.Revisions[id] = revision
 	}
-	if err := rows.Err(); err != nil {
+	if err := assertionRows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	rows.Close()
-	rows, err = db.Query("SELECT evidence_id, assertion_id, kind, raw_text FROM evidence")
+	evidenceRows, err := db.QueryContext(context.Background(), "SELECT evidence_id, assertion_id, kind, raw_text FROM evidence")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for rows.Next() {
+	defer func() {
+		if err := evidenceRows.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	for evidenceRows.Next() {
 		var id, assertionID, kind, text string
-		if err := rows.Scan(&id, &assertionID, &kind, &text); err != nil {
+		if err := evidenceRows.Scan(&id, &assertionID, &kind, &text); err != nil {
 			t.Fatal(err)
 		}
 		state.IDs[id] = true
 		state.Evidence[assertionID+"\x00"+kind+"\x00"+text]++
 	}
-	if err := rows.Err(); err != nil {
+	if err := evidenceRows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	rows.Close()
-	rows, err = db.Query("SELECT relation_id FROM relations")
+	relationRows, err := db.QueryContext(context.Background(), "SELECT relation_id FROM relations")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for rows.Next() {
+	defer func() {
+		if err := relationRows.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	for relationRows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		if err := relationRows.Scan(&id); err != nil {
 			t.Fatal(err)
 		}
 		state.IDs[id] = true
 	}
-	if err := rows.Err(); err != nil {
+	if err := relationRows.Err(); err != nil {
 		t.Fatal(err)
 	}
+
 	return state
 }
 
@@ -436,51 +462,55 @@ func seedQualityStore(t *testing.T, path string, seed qualitySeed) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			t.Error(err)
+		}
+	}()
 	for _, a := range seed.Assertions {
 		revision := a.Revision
 		if revision == 0 {
 			revision = 1
 		}
-		if _, err := tx.Exec("INSERT INTO assertions(assertion_id,current_revision,created_at) VALUES(?,?,?)", a.ID, revision, "2026-01-01T00:00:00Z"); err != nil {
+		if _, err := tx.ExecContext(context.Background(), "INSERT INTO assertions(assertion_id,current_revision,created_at) VALUES(?,?,?)", a.ID, revision, "2026-01-01T00:00:00Z"); err != nil {
 			t.Fatal(err)
 		}
 		revisions := append(append([]qualityRevision{}, a.Prior...), qualityRevision{revision, a.Text})
 		for _, r := range revisions {
-			if _, err := tx.Exec("INSERT INTO assertion_revisions(assertion_id,revision,normalized_text,created_at) VALUES(?,?,?,?)", a.ID, r.Revision, r.Text, "2026-01-01T00:00:00Z"); err != nil {
+			if _, err := tx.ExecContext(context.Background(), "INSERT INTO assertion_revisions(assertion_id,revision,normalized_text,created_at) VALUES(?,?,?,?)", a.ID, r.Revision, r.Text, "2026-01-01T00:00:00Z"); err != nil {
 				t.Fatal(err)
 			}
 		}
-		if _, err := tx.Exec("INSERT INTO assertion_lexical_index(assertion_id,normalized_text,concept_name,concept_alias,scope_key,scope_value,assertion_alias) VALUES(?,?,?,?,?,?,?)", a.ID, a.Text, "channel", "", "language", "Go", ""); err != nil {
+		if _, err := tx.ExecContext(context.Background(), "INSERT INTO assertion_lexical_index(assertion_id,normalized_text,concept_name,concept_alias,scope_key,scope_value,assertion_alias) VALUES(?,?,?,?,?,?,?)", a.ID, a.Text, "channel", "", "language", "Go", ""); err != nil {
 			t.Fatal(err)
 		}
 		for key, value := range a.Scope {
-			if _, err := tx.Exec("INSERT INTO revision_scopes(assertion_id,revision,scope_key,scope_value) VALUES(?,?,?,?)", a.ID, revision, key, value); err != nil {
+			if _, err := tx.ExecContext(context.Background(), "INSERT INTO revision_scopes(assertion_id,revision,scope_key,scope_value) VALUES(?,?,?,?)", a.ID, revision, key, value); err != nil {
 				t.Fatal(err)
 			}
 		}
 		if a.Temporal.VersionScope != "" || a.Temporal.ValidFrom != "" {
-			if _, err := tx.Exec("INSERT INTO temporal_metadata(assertion_id,revision,valid_from,version_scope) VALUES(?,?,?,?)", a.ID, revision, nullableQualityString(a.Temporal.ValidFrom), nullableQualityString(a.Temporal.VersionScope)); err != nil {
+			if _, err := tx.ExecContext(context.Background(), "INSERT INTO temporal_metadata(assertion_id,revision,valid_from,version_scope) VALUES(?,?,?,?)", a.ID, revision, nullableQualityString(a.Temporal.ValidFrom), nullableQualityString(a.Temporal.VersionScope)); err != nil {
 				t.Fatal(err)
 			}
 		}
 		for _, e := range a.Evidence {
-			if _, err := tx.Exec("INSERT INTO evidence(evidence_id,assertion_id,kind,raw_text,observed_at,created_at) VALUES(?,?,?,?,?,?)", e.ID, a.ID, e.Kind, e.Text, e.ObservedAt, "2026-01-01T00:00:00Z"); err != nil {
+			if _, err := tx.ExecContext(context.Background(), "INSERT INTO evidence(evidence_id,assertion_id,kind,raw_text,observed_at,created_at) VALUES(?,?,?,?,?,?)", e.ID, a.ID, e.Kind, e.Text, e.ObservedAt, "2026-01-01T00:00:00Z"); err != nil {
 				t.Fatal(err)
 			}
 			if e.Temporal.VersionScope != "" {
-				if _, err := tx.Exec("INSERT INTO evidence_temporal_metadata(evidence_id,version_scope) VALUES(?,?)", e.ID, e.Temporal.VersionScope); err != nil {
+				if _, err := tx.ExecContext(context.Background(), "INSERT INTO evidence_temporal_metadata(evidence_id,version_scope) VALUES(?,?)", e.ID, e.Temporal.VersionScope); err != nil {
 					t.Fatal(err)
 				}
 			}
 		}
 	}
 	for _, r := range seed.Relations {
-		if _, err := tx.Exec("INSERT INTO relations(relation_id,source_kind,source_id,relation_type,target_kind,target_id,created_at) VALUES(?,?,?,?,?,?,?)", r.ID, "assertion", r.Source, r.Type, "assertion", r.Target, "2026-01-01T00:00:00Z"); err != nil {
+		if _, err := tx.ExecContext(context.Background(), "INSERT INTO relations(relation_id,source_kind,source_id,relation_type,target_kind,target_id,created_at) VALUES(?,?,?,?,?,?,?)", r.ID, "assertion", r.Source, r.Type, "assertion", r.Target, "2026-01-01T00:00:00Z"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -493,6 +523,7 @@ func nullableQualityString(value string) any {
 	if value == "" {
 		return nil
 	}
+
 	return value
 }
 
@@ -509,7 +540,7 @@ func assertQualityResultIDs(t *testing.T, stdout string, want []string) {
 	if err := json.Unmarshal([]byte(stdout), &response); err != nil {
 		t.Fatal(err)
 	}
-	got := []string{}
+	got := make([]string, 0, len(response.Data.Results))
 	for _, r := range response.Data.Results {
 		got = append(got, r.ID)
 	}
@@ -567,5 +598,6 @@ func readQualityFixture(t *testing.T) qualityFixture {
 	if err := json.Unmarshal(source, &f); err != nil {
 		t.Fatal(err)
 	}
+
 	return f
 }
