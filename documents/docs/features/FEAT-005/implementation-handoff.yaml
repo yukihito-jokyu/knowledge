@@ -1,0 +1,199 @@
+feature: FEAT-005
+name: 知識評価の品質保証
+planning_status: draft
+
+design_readiness:
+  audited_by: task-breakdown
+  status: complete
+  contracts:
+    data:
+      status: complete
+      evidence: docs/features/FEAT-005/design.md#interfaces--data
+    operations:
+      status: complete
+      evidence: docs/features/FEAT-005/design.md#acceptance--test-design
+    retrieval:
+      status: complete
+      evidence: docs/features/FEAT-005/design/scenario-catalog.md
+    migration:
+      status: not_applicable
+      evidence: 新規または変更する永続schema・migrationはない。
+    fixtures:
+      status: complete
+      evidence: docs/features/FEAT-005/design/scenario-catalog.md
+  format_schemas:
+    relational_ddl:
+      status: not_applicable
+      evidence: Store schemaを追加・変更せず、既存Storeをcaseごとの一時領域で観測する。
+    json_operations:
+      status: complete
+      evidence: docs/features/FEAT-001/design/command-catalog.md および docs/features/FEAT-001/design/commands/
+  diagrams:
+    flowchart:
+      status: complete
+      evidence: docs/features/FEAT-005/design.md#fixture実行フロー
+    sequence:
+      status: complete
+      evidence: docs/features/FEAT-005/design.md#end-to-end相互作用
+  operation_documentation:
+    status: complete
+    command_catalog: docs/features/FEAT-001/design/command-catalog.md
+    operation_contracts: docs/features/FEAT-001/design/commands/
+    evidence: FEAT-005は既存CLIを観測するため、利用するoperationのI/O・error・exit code・transactionはFEAT-001資料を参照する。新operationは追加しない。
+  independent_design_review:
+    status: complete
+    reviewer: design-review
+    reviewed_by: independent_subagent
+    result: pass
+    evidence: docs/features/FEAT-005/design-review.md
+  human_design_review:
+    status: approved
+    approved_by: human
+    evidence: .ai/workflow/state.yaml#features.FEAT-005.human_design_review
+  implementation_readiness_review:
+    status: pending
+    reviewer: pending
+    reviewed_by: pending
+    repository_overview: parent repository root (/Users/yukihito/Documents/github_projects/knowledge)
+    result: pending
+    evidence: docs/features/FEAT-005/tasks.md#implementation-readiness-review
+    scope:
+      - AGENTS.md
+      - testdata/fixtures/
+      - test/integration/
+      - cmd/knowledge/
+      - internal/
+      - Taskfile.yml
+      - docs/features/FEAT-001/implementation-handoff.yaml
+      - docs/features/FEAT-002/implementation-handoff.yaml
+      - docs/features/FEAT-003/implementation-handoff.yaml
+      - docs/features/FEAT-004/implementation-handoff.yaml
+
+requirements:
+  - REQ-021
+business_rules:
+  - BR-002
+  - BR-003
+  - BR-005
+  - BR-008
+  - BR-009
+nonfunctional_requirements:
+  - NFR-001
+  - NFR-002
+  - NFR-003
+  - NFR-004
+  - NFR-005
+  - NFR-006
+
+implementation_deliverables:
+  root: parent repository test areas
+  items:
+    - path: testdata/fixtures/
+      responsibility: Scenario A〜Jと派生Xの固定入力、隔離Store seed、期待oracle、Store差分。
+    - path: test/integration/
+      responsibility: 実knowledge binaryと隔離SQLite Storeを使うプロセス境界の観測。
+  dependencies:
+    - path: docs/features/FEAT-001/implementation-handoff.yaml
+      responsibility: 既存Knowledge CLIのoperation・JSON・SQLite契約。
+    - path: docs/features/FEAT-002/implementation-handoff.yaml
+      responsibility: Assessment／Search Traceの契約。
+    - path: docs/features/FEAT-003/implementation-handoff.yaml
+      responsibility: Reading Valueの契約。
+    - path: docs/features/FEAT-004/implementation-handoff.yaml
+      responsibility: Knowledge Acquisition／Updateの契約。
+  excluded_locations:
+    - cmd/knowledge/
+    - internal/
+    - SQLite migration
+    - Knowledge CLIの公開operation・JSON
+    - 公開設定
+
+logical_areas:
+  - fixture / test data
+  - workflow verification: search / contract reference
+  - workflow verification: acquisition / update
+  - integration verification
+
+tasks:
+  - id: TASK-005-01
+    title: 固定受入Fixtureと隔離Store契約を提供する
+    logical_area: fixture / test data
+    depends_on:
+      - FEAT-001 implementation handoff
+      - FEAT-002 implementation handoff
+      - FEAT-003 implementation handoff
+      - FEAT-004 implementation handoff
+  - id: TASK-005-02
+    title: Knowledge Searchの層別oracleとReading Value参照を検証する
+    logical_area: "workflow verification: search / contract reference"
+    depends_on:
+      - TASK-005-01
+  - id: TASK-005-03
+    title: Knowledge AcquisitionとKnowledge Updateの層別oracleを検証する
+    logical_area: "workflow verification: acquisition / update"
+    depends_on:
+      - TASK-005-01
+  - id: TASK-005-04
+    title: プロセス境界の横断受入suiteと診断を完成する
+    logical_area: integration verification
+    depends_on:
+      - TASK-005-02
+      - TASK-005-03
+
+acceptance_criteria:
+  - Scenario A〜Jおよび派生Xを、固定case ID、合成入力、隔離Store、期待oracle、期待Store差分で再現可能に実行する。
+  - CLI／Store、Knowledge Search、Knowledge Acquisition、Knowledge Update、End-to-Endの成果物を層別に照合し、最初の不一致層と未実行層を記録する。A／G／I／JはFEAT-003の指定節への参照完全性だけを確認する。
+  - F／GではCandidate、Decision、CLI mutation、Store差分がなく、Hでは訂正前のEvidence・revision・Relationを保持して訂正後のEvidence・revisionを追加する。
+  - A〜E、H、I、Jでは既存Search Trace契約を確認し、A／G／I／Jの`reading_value_reference`がFEAT-003の指定節へ一意に遡れることを確認する。
+  - 技術失敗Xと中断Xを実CLIプロセス境界で確認し、成功のAssessment／推奨へ変換せず後続を実行しない。
+  - 新しい製品公開契約、CLI operation、DB schema、migration、公開設定を追加・変更しない。
+
+constraints:
+  - Fixtureはテスト専用であり、実ユーザーStore、外部記事、認証情報、既定Store、共有Storeを使用しない。
+  - Caseの入力、seed、oracle、Store差分はdocs/features/FEAT-005/design/scenario-catalog.mdを正とし、実装の都合で変更しない。
+  - 既存CLIとWorkflowを消費・観測するだけで、検索・更新・推奨の業務規則を変更しない。Workflow Skill自体も変更しない。
+  - 実装Taskは承認済みの配置以外のfile path、symbol、framework API、ライブラリ固有の構造を指示しない。
+
+decisions:
+  - id: DEC-FEAT-016
+    source: docs/features/FEAT-005/decisions/DEC-FEAT-016.md
+
+interfaces_and_contracts:
+  - Fixtureはcase ID、固定入力、Store seed、期待層別oracle、期待Store差分、契約参照を持ち、単層実行とEnd-to-End実行は同じcase IDを共有する。
+  - Case Resultは照合順に最初の不一致層、根拠参照、後続未実行層またはnot_run理由を記録する。
+  - CLI／Storeのargv、stdout、stderr、exit code、実行順、mutation数、履歴差分は既存FEAT-001公開契約を観測する。
+  - Search／Trace、Candidate／Update ResultはFEAT-002およびFEAT-004の既存契約を観測する。A／G／I／JのReading ValueはFEAT-003の指定節を参照するだけで、実行結果を観測しない。
+
+contract_artifacts:
+  - kind: feature_design
+    source: docs/features/FEAT-005/design.md
+  - kind: scenario_catalog
+    source: docs/features/FEAT-005/design/scenario-catalog.md
+  - kind: existing_cli_contract
+    source: docs/features/FEAT-001/design/command-catalog.md
+  - kind: existing_cli_operations
+    source: docs/features/FEAT-001/design/commands/
+  - kind: search_trace_contract
+    source: docs/features/FEAT-002/design/search-trace.md
+  - kind: reading_value_contract
+    source: skills/reading-value/references/verification.md
+  - kind: acquisition_update_contract
+    source: docs/features/FEAT-004/design/workflow-contracts.md
+  - kind: fixture_oracle_decision
+    source: docs/features/FEAT-005/decisions/DEC-FEAT-016.md
+  - kind: independent_design_review
+    source: docs/features/FEAT-005/design-review.md
+  - kind: human_design_review
+    source: .ai/workflow/state.yaml#features.FEAT-005.human_design_review
+
+out_of_scope:
+  - Knowledge CLIのcmd/knowledge/、internal/、SQLite schema・migration、公開CLI JSON、公開設定の追加・変更。
+  - 外部記事サイトへのライブアクセス、実ユーザー情報、性能ベンチマーク、一般的な記事品質評価。
+  - 検索・Evidence分類・更新・Reading Valueの業務規則を変更すること。
+  - Fixture外の自動再実行、補償削除、再開ledger、製品UI/APIの追加。
+
+implementation_notes:
+  - TASK-005-01でcase IDと隔離Fixtureを固定し、TASK-005-02とTASK-005-03が責務境界ごとのoracleを消費し、TASK-005-04でプロセス境界の横断受入を完成する。
+  - 固定済みの配置以外の実装組織化、symbol、フレームワーク、ライブラリはImplementation領域で既存基盤に従って決める。
+  - Goを変更する実装ではgofmt、go test ./...、go vet ./...を実行する。CLI／SQLiteを観測するcaseはtest/integration/の実プロセス境界で検証する。
+  - 配置修正後に独立設計レビュー、利用者承認、実装可能性レビューを再実施するまで、handoffをreadyにしない。
