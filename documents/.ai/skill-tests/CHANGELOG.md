@@ -5,6 +5,13 @@ Skill修正時に追記する。
 ## 2026-08-15
 
 - Target Skill: feature-design
+- Symptom: 検証専用Featureで、Fixture実行と受入oracleを通常利用時に読み込まれるWorkflow Skillの変更対象へ置いたため、実行時コンテキストが不要に増える設計になった。
+- Root Cause: Implementation Deliverables / Placementが、実行用成果物とテスト専用成果物のコンテキスト境界を区別していなかった。
+- Change: 検証専用Featureでは、実行用Skillを被観測対象として扱い、テスト／Fixture配置へ検証資源を置く規則をfeature-designへ追加した。
+- Regression Scenario: SKILLTEST-026
+- Notes: 実行用Skillの業務手順または実行時契約を変更する要件がある場合は、この規則よりその要件を優先する。
+
+- Target Skill: feature-design
 - Symptom: 人間判断が必要な設計上の未確定事項について、Decisionを作成・提示する前に会話だけで選択を求めた。
 - Root Cause: Human Decision PointsがDecisionの作成・説明・会話での参照順序を必須化していなかった。
 - Change: 人間への質問前に、平易な未決Decisionへ機能・事実・未確定理由・選択肢の影響・推奨・反映先を記録し、会話ではそのDecisionを参照する手順を追加した。
