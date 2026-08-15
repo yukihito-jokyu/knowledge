@@ -27,6 +27,7 @@ reviewにblocking findingが残る場合は監査せず`BLOCKED`として返す�
 5. 変更に応じて、少なくとも次のうち該当する経路を確認する。
    - 新規DBと直前version DBでの起動・migration・再起動
    - create/revise後にsearch/get/get-evidenceなどへ値を受け渡す操作列
+   - `design/use-cases/` の各ユースケースで、前の成功responseから得たIDを次のCLI invocationへ渡す操作列。該当するユースケースは、同一の隔離Store・実binaryで設計に記載された全操作を順に実行し、固定IDではなく直前responseから抽出した値で受渡しを観測する。個別コマンドfixtureの集合だけではこの証拠にしない。
    - selector、Alias、Scope AND、null、期間境界、順序、空結果
    - validation/storage/conflict/cancel時のstdout、stderr、exit code、DB不変性
    - 変更していない近接operationを1つ以上通すregression経路

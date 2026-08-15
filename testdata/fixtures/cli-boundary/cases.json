@@ -101,6 +101,42 @@
       "stderr": null
     },
     {
+      "name": "search-text のConcept Alias一致",
+      "arguments": ["search-text", "--query", "chan"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": [
+        {"assertion_id": "asrt_01", "normalized_text": "channel send", "revision": 1, "concepts": [{"concept_id": "cpt_01", "name": "channel"}], "scope": [{"key": "language", "value": "Go"}], "matched_fields": ["concept"]}
+      ]}},
+      "stderr": null
+    },
+    {
+      "name": "search-text のAssertion Alias一致",
+      "arguments": ["search-text", "--query", "ch"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": [
+        {"assertion_id": "asrt_01", "normalized_text": "channel send", "revision": 1, "concepts": [{"concept_id": "cpt_01", "name": "channel"}], "scope": [{"key": "language", "value": "Go"}], "matched_fields": ["alias"]}
+      ]}},
+      "stderr": null
+    },
+    {
+      "name": "search-text のScope key一致",
+      "arguments": ["search-text", "--query", "language"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": [
+        {"assertion_id": "asrt_01", "normalized_text": "channel send", "revision": 1, "concepts": [{"concept_id": "cpt_01", "name": "channel"}], "scope": [{"key": "language", "value": "Go"}], "matched_fields": ["scope_key"]}
+      ]}},
+      "stderr": null
+    },
+    {
+      "name": "search-text のScope value一致",
+      "arguments": ["search-text", "--query", "Go"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": [
+        {"assertion_id": "asrt_01", "normalized_text": "channel send", "revision": 1, "concepts": [{"concept_id": "cpt_01", "name": "channel"}], "scope": [{"key": "language", "value": "Go"}], "matched_fields": ["scope_value"]}
+      ]}},
+      "stderr": null
+    },
+    {
       "name": "search-text の0件",
       "arguments": ["search-text", "--query", "missing"],
       "exit_code": 0,
@@ -197,6 +233,25 @@
       "exit_code": 0,
       "stdout": {"ok": true, "data": {"results": [
         {"relation_id": "rel_02", "direction": "outgoing", "seed": {"kind": "assertion", "id": "asrt_01"}, "target": {"kind": "assertion", "id": "asrt_02", "normalized_text": "empty evidence"}}
+      ]}},
+      "stderr": null
+    },
+    {
+      "name": "search-contradictions のincoming",
+      "arguments": ["search-contradictions", "--assertion-id", "asrt_02"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": [
+        {"relation_id": "rel_02", "direction": "incoming", "seed": {"kind": "assertion", "id": "asrt_02"}, "target": {"kind": "assertion", "id": "asrt_01", "normalized_text": "channel send"}}
+      ]}},
+      "stderr": null
+    },
+    {
+      "name": "search-contradictions のConcept両端",
+      "arguments": ["search-contradictions", "--concept", "chan"],
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"results": [
+        {"relation_id": "rel_02", "direction": "outgoing", "seed": {"kind": "assertion", "id": "asrt_01"}, "target": {"kind": "assertion", "id": "asrt_02", "normalized_text": "empty evidence"}},
+        {"relation_id": "rel_02", "direction": "incoming", "seed": {"kind": "assertion", "id": "asrt_02"}, "target": {"kind": "assertion", "id": "asrt_01", "normalized_text": "channel send"}}
       ]}},
       "stderr": null
     },
