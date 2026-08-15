@@ -27,10 +27,10 @@ func TestKnowledgeCLIAtProcessBoundary(t *testing.T) {
 	prepareRetrievalDatabase(t, store.Path, fixture.Seed)
 	before, err := os.ReadFile(store.Path)
 	if err != nil {
-		t.Fatalf("検索前のStoreを読む: %v", err)
+		t.Fatalf("read-only実行前のStoreを読む: %v", err)
 	}
 	binary := buildCLI(t, false)
-	for _, testCase := range fixture.Cases {
+	for _, testCase := range readOnlyFixtureCases(fixture.Cases) {
 		t.Run(testCase.Name, func(t *testing.T) {
 			stdout, stderr, err := runCommand(binary, store.Environment, testCase.Arguments)
 			if !isExitCode(err, testCase.ExitCode) {
@@ -39,6 +39,13 @@ func TestKnowledgeCLIAtProcessBoundary(t *testing.T) {
 			assertStdout(t, stdout, testCase.Stdout)
 			assertStderr(t, stderr, testCase.Stderr)
 		})
+	}
+	after, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatalf("read-only実行後のStoreを読む: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("read-only CLIがStoreを更新しました")
 	}
 	createStore := defaultStoreConfiguration(t, t.TempDir())
 	prepareRetrievalDatabase(t, createStore.Path, fixture.Seed)
@@ -52,13 +59,245 @@ func TestKnowledgeCLIAtProcessBoundary(t *testing.T) {
 			assertCreateSuccess(t, stdout)
 		})
 	}
-	after, err := os.ReadFile(store.Path)
+}
+
+func readOnlyFixtureCases(cases []cliFixtureCase) []cliFixtureCase {
+	readOnly := make([]cliFixtureCase, 0, len(cases))
+	for _, testCase := range cases {
+		if !isHistoryOperation(testCase.Arguments) {
+			readOnly = append(readOnly, testCase)
+		}
+	}
+
+	return readOnly
+}
+
+func TestKnowledgeCLIHistoryAtProcessBoundary(t *testing.T) {
+	fixture := readFixture(t)
+	store := defaultStoreConfiguration(t, t.TempDir())
+	prepareRetrievalDatabase(t, store.Path, fixture.Seed)
+	binary := buildCLI(t, false)
+	var attachData map[string]any
+	for _, testCase := range fixture.Cases {
+		if !isHistoryOperation(testCase.Arguments) || testCase.ExitCode != 0 {
+			continue
+		}
+		data := runHistoryFixtureSuccess(t, binary, store, testCase)
+		if testCase.Arguments[0] == "attach-evidence" {
+			attachData = data
+		}
+	}
+	if attachData == nil {
+		t.Fatal("attach-evidence成功fixtureがありません")
+	}
+	assertHistoryReadback(t, binary, store, attachData["evidence_id"].(string))
+	assertHistoryFailuresLeaveStateUnchanged(t, binary, store, fixture)
+}
+
+func isHistoryOperation(arguments []string) bool {
+	return len(arguments) > 0 && (arguments[0] == "attach-evidence" || arguments[0] == "revise" || arguments[0] == "supersede")
+}
+
+func assertHistorySuccess(t *testing.T, source string, operation string) map[string]any {
+	t.Helper()
+	var response struct {
+		OK   bool           `json:"ok"`
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(source), &response); err != nil || !response.OK {
+		t.Fatalf("%s response = %q, %v", operation, source, err)
+	}
+
+	return response.Data
+}
+
+func runHistoryFixtureSuccess(t *testing.T, binary string, store defaultStore, testCase cliFixtureCase) map[string]any {
+	t.Helper()
+	stdout, stderr, err := runCommand(binary, store.Environment, testCase.Arguments)
+	if !isExitCode(err, testCase.ExitCode) {
+		t.Fatalf("%s = %v, want exit %d", testCase.Name, err, testCase.ExitCode)
+	}
+	assertStderr(t, stderr, testCase.Stderr)
+
+	return assertHistoryFixtureSuccess(t, stdout, testCase)
+}
+
+func assertHistoryFixtureSuccess(t *testing.T, source string, testCase cliFixtureCase) map[string]any {
+	t.Helper()
+	data := assertHistorySuccess(t, source, testCase.Arguments[0])
+	expected, ok := testCase.Stdout.(map[string]any)
+	if !ok {
+		t.Fatalf("%s fixture stdout = %#v", testCase.Name, testCase.Stdout)
+	}
+	fixed, ok := expected["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s fixture data = %#v", testCase.Name, expected)
+	}
+	for key, expectedValue := range fixed {
+		actual, found := data[key]
+		if !found {
+			t.Fatalf("history response field %qがありません: %#v", key, data)
+		}
+		if !reflect.DeepEqual(actual, expectedValue) {
+			t.Fatalf("history response %s = %#v, want %#v", key, actual, expectedValue)
+		}
+	}
+	for _, key := range historyDynamicIDFields(testCase.Arguments[0]) {
+		value, ok := data[key].(string)
+		if !ok || !strings.HasPrefix(value, keyPrefix(key)) || len(value) <= len(keyPrefix(key)) {
+			t.Fatalf("history response %s = %#v, want %s形式", key, data[key], keyPrefix(key))
+		}
+	}
+
+	return data
+}
+
+func assertHistoryReadback(t *testing.T, binary string, store defaultStore, evidenceID string) {
+	t.Helper()
+	getStdout, getStderr, getErr := runCommand(binary, store.Environment, []string{"get", "--assertion-id", "asrt_01"})
+	if getErr != nil {
+		t.Fatalf("get = %v", getErr)
+	}
+	assertStderr(t, getStderr, nil)
+	var getResponse struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			AssertionID     string `json:"assertion_id"`
+			CurrentRevision int    `json:"current_revision"`
+			Revisions       []struct {
+				Revision       int    `json:"revision"`
+				NormalizedText string `json:"normalized_text"`
+			} `json:"revisions"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(getStdout), &getResponse); err != nil || !getResponse.OK || getResponse.Data.AssertionID != "asrt_01" || getResponse.Data.CurrentRevision != 2 || len(getResponse.Data.Revisions) != 2 || getResponse.Data.Revisions[0].NormalizedText != "channel send" || getResponse.Data.Revisions[1].Revision != 2 || getResponse.Data.Revisions[1].NormalizedText != "channel" {
+		t.Fatalf("revision readback = %q, %#v, %v", getStdout, getResponse, err)
+	}
+	evidenceStdout, evidenceStderr, evidenceErr := runCommand(binary, store.Environment, []string{"get-evidence", "--assertion-id", "asrt_01"})
+	if evidenceErr != nil {
+		t.Fatalf("get-evidence = %v", evidenceErr)
+	}
+	assertStderr(t, evidenceStderr, nil)
+	var evidenceResponse struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Evidence []struct {
+				ID string `json:"evidence_id"`
+			} `json:"evidence"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(evidenceStdout), &evidenceResponse); err != nil || !evidenceResponse.OK || len(evidenceResponse.Data.Evidence) != 2 || !evidenceIDsContain(evidenceResponse.Data.Evidence, "evd_01", evidenceID) {
+		t.Fatalf("evidence readback = %q, %#v, %v", evidenceStdout, evidenceResponse, err)
+	}
+	searchStdout, searchStderr, searchErr := runCommand(binary, store.Environment, []string{"search-text", "--query", "channel"})
+	if searchErr != nil {
+		t.Fatalf("search-text = %v", searchErr)
+	}
+	assertStderr(t, searchStderr, nil)
+	var searchResponse struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Results []struct {
+				AssertionID    string `json:"assertion_id"`
+				NormalizedText string `json:"normalized_text"`
+				Revision       int    `json:"revision"`
+			} `json:"results"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(searchStdout), &searchResponse); err != nil || !searchResponse.OK || len(searchResponse.Data.Results) != 1 || searchResponse.Data.Results[0].AssertionID != "asrt_01" || searchResponse.Data.Results[0].NormalizedText != "channel" || searchResponse.Data.Results[0].Revision != 2 {
+		t.Fatalf("current lexical index = %q, %#v, %v", searchStdout, searchResponse, err)
+	}
+}
+
+func evidenceIDsContain(evidence []struct {
+	ID string `json:"evidence_id"`
+}, expected ...string) bool {
+	found := make(map[string]bool, len(evidence))
+	for _, item := range evidence {
+		found[item.ID] = true
+	}
+	for _, id := range expected {
+		if !found[id] {
+			return false
+		}
+	}
+
+	return true
+}
+
+func historyDynamicIDFields(operation string) []string {
+	if operation == "attach-evidence" {
+		return []string{"evidence_id"}
+	}
+	if operation == "supersede" {
+		return []string{"relation_id"}
+	}
+
+	return nil
+}
+
+func keyPrefix(key string) string {
+	if key == "evidence_id" {
+		return "evd_"
+	}
+
+	return "rel_"
+}
+
+func assertHistoryFailuresLeaveStateUnchanged(t *testing.T, binary string, store defaultStore, fixture cliFixture) {
+	t.Helper()
+	for _, testCase := range fixture.Cases {
+		if !isHistoryOperation(testCase.Arguments) || testCase.ExitCode == 0 {
+			continue
+		}
+		t.Run(testCase.Name, func(t *testing.T) {
+			before := readHistoryState(t, store.Path)
+			stdout, stderr, err := runCommand(binary, store.Environment, testCase.Arguments)
+			if !isExitCode(err, testCase.ExitCode) {
+				t.Fatalf("exit = %v, want %d", err, testCase.ExitCode)
+			}
+			assertStdout(t, stdout, testCase.Stdout)
+			assertStderr(t, stderr, testCase.Stderr)
+			if after := readHistoryState(t, store.Path); !reflect.DeepEqual(after, before) {
+				t.Fatalf("error後にDBが更新されました: before=%#v after=%#v", before, after)
+			}
+		})
+	}
+}
+
+type historyState struct {
+	EvidenceCount int
+	RevisionCount int
+	Current       int
+	RelationCount int
+	IndexText     string
+}
+
+func readHistoryState(t *testing.T, path string) historyState {
+	t.Helper()
+	database, err := sql.Open("sqlite", path)
 	if err != nil {
-		t.Fatalf("検索後のStoreを読む: %v", err)
+		t.Fatal(err)
 	}
-	if !bytes.Equal(before, after) {
-		t.Fatal("検索でStoreが更新されました")
+	defer database.Close()
+	var state historyState
+	if err := database.QueryRowContext(context.Background(), "SELECT count(*) FROM evidence WHERE assertion_id = 'asrt_01'").Scan(&state.EvidenceCount); err != nil {
+		t.Fatal(err)
 	}
+	if err := database.QueryRowContext(context.Background(), "SELECT count(*) FROM assertion_revisions WHERE assertion_id = 'asrt_01'").Scan(&state.RevisionCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.QueryRowContext(context.Background(), "SELECT current_revision FROM assertions WHERE assertion_id = 'asrt_01'").Scan(&state.Current); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.QueryRowContext(context.Background(), "SELECT count(*) FROM relations WHERE relation_type = 'supersedes'").Scan(&state.RelationCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.QueryRowContext(context.Background(), "SELECT normalized_text FROM assertion_lexical_index WHERE assertion_id = 'asrt_01'").Scan(&state.IndexText); err != nil {
+		t.Fatal(err)
+	}
+
+	return state
 }
 
 func TestKnowledgeCLICreatesDefaultStoreAtProcessBoundary(t *testing.T) {
@@ -98,6 +337,28 @@ func TestKnowledgeCLIReportsDefaultStoreFailureAtProcessBoundary(t *testing.T) {
 			assertStderr(t, stderr, testCase.Stderr)
 		})
 	}
+	stdout, stderr, err := runCommand(binary, store.Environment, []string{
+		"attach-evidence",
+		"--assertion-id",
+		"asrt_01",
+		"--evidence-kind",
+		"user_code",
+		"--evidence-text",
+		"evidence",
+		"--evidence-observed-at",
+		"2026-08-14T00:00:00Z",
+	})
+	if !isExitCode(err, 1) {
+		t.Fatalf("history storage failure = %v", err)
+	}
+	assertStdout(t, stdout, "")
+	assertStderr(t, stderr, map[string]any{
+		"ok": false,
+		"error": map[string]any{
+			"code":    "storage_error",
+			"message": "Knowledge Storeを開けません",
+		},
+	})
 }
 
 func TestKnowledgeCLICancelsAtProcessBoundary(t *testing.T) {
@@ -126,6 +387,34 @@ func TestKnowledgeCLICancelsAtProcessBoundary(t *testing.T) {
 				t.Fatal("中断されたmutationがAssertionを残しました")
 			}
 		})
+	}
+}
+
+func TestKnowledgeCLIHistoryMutationCancelsAtProcessBoundary(t *testing.T) {
+	fixture := readFixture(t)
+	store := defaultStoreConfiguration(t, t.TempDir())
+	prepareRetrievalDatabase(t, store.Path, fixture.Seed)
+	binary := buildCLI(t, true)
+	before := readHistoryState(t, store.Path)
+	arguments := []string{
+		"attach-evidence",
+		"--assertion-id",
+		"asrt_01",
+		"--evidence-kind",
+		"user_code",
+		"--evidence-text",
+		"interrupted evidence",
+		"--evidence-observed-at",
+		"2026-08-14T00:00:00Z",
+	}
+	stdout, stderr, err := runInterruptedCommand(t, binary, store.Environment, arguments, "mutation")
+	if !isExitCode(err, 130) {
+		t.Fatalf("exit = %v, want 130", err)
+	}
+	assertStdout(t, stdout, "")
+	assertStderr(t, stderr, nil)
+	if after := readHistoryState(t, store.Path); !reflect.DeepEqual(after, before) {
+		t.Fatalf("中断されたhistory mutationがDBを更新しました: before=%#v after=%#v", before, after)
 	}
 }
 

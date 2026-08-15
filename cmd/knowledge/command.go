@@ -36,6 +36,9 @@ func (function commandExecutorFunc) Execute(ctx context.Context, parsed command)
 
 var commandExecutors = map[string]commandExecutor{
 	"create":                commandExecutorFunc(executeCreate),
+	"attach-evidence":       commandExecutorFunc(executeHistory),
+	"revise":                commandExecutorFunc(executeHistory),
+	"supersede":             commandExecutorFunc(executeHistory),
 	"search-text":           commandExecutorFunc(executeRetrievalCommand),
 	"search-concept":        commandExecutorFunc(executeRetrievalCommand),
 	"search-related":        commandExecutorFunc(executeRetrievalCommand),

@@ -17,6 +17,27 @@ type CreateService struct {
 	store domain.CreateStore
 }
 
+// HistoryService は履歴mutationを実行する。
+type HistoryService struct{ store domain.HistoryStore }
+
+// NewHistoryService は履歴mutationサービスを作る。
+func NewHistoryService(store domain.HistoryStore) HistoryService { return HistoryService{store: store} }
+
+// AttachEvidence は根拠を追加する。
+func (s HistoryService) AttachEvidence(ctx context.Context, request domain.AttachEvidenceRequest) (domain.AttachEvidenceResult, error) {
+	return s.store.AttachEvidence(ctx, request)
+}
+
+// Revise は新しいrevisionを追加する。
+func (s HistoryService) Revise(ctx context.Context, request domain.ReviseRequest) (domain.ReviseResult, error) {
+	return s.store.ReviseAssertion(ctx, request)
+}
+
+// Supersede は置換Relationを追加する。
+func (s HistoryService) Supersede(ctx context.Context, request domain.SupersedeRequest) (domain.SupersedeResult, error) {
+	return s.store.Supersede(ctx, request)
+}
+
 // NewCreateService は作成操作のサービスを作る。
 func NewCreateService(store domain.CreateStore) CreateService {
 	return CreateService{store: store}
