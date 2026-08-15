@@ -1,0 +1,4 @@
+interface:
+  display_name: "Knowledge CLI Orchestrator"
+  short_description: "Knowledge CLI実装を安全に統括する"
+  default_prompt: "Use $impl-knowledge-cli to implement an approved Knowledge CLI task."

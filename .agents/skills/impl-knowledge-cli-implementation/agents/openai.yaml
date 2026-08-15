@@ -1,0 +1,4 @@
+interface:
+  display_name: "Knowledge CLI Implementer"
+  short_description: "Knowledge CLIのGo実装を担当する"
+  default_prompt: "Use $impl-knowledge-cli-implementation to implement an approved Knowledge CLI change."

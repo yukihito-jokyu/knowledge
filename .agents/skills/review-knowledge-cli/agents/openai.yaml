@@ -1,0 +1,4 @@
+interface:
+  display_name: "Knowledge CLI Reviewer"
+  short_description: "Knowledge CLI候補diffを独立レビューする"
+  default_prompt: "Use $review-knowledge-cli to review a Knowledge CLI implementation candidate."
