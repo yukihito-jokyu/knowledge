@@ -1197,7 +1197,13 @@ func (s *Store) GetEvidence(ctx context.Context, assertionID string) (domain.Evi
 			return domain.EvidenceResult{}, fmt.Errorf("read evidence: %w", err)
 		}
 		if validFrom.Valid || validUntil.Valid || versionScope.Valid || observedAt.Valid || lastVerified.Valid {
-			evidence.Temporal = &domain.Temporal{ValidFrom: nullableString(validFrom), ValidUntil: nullableString(validUntil), VersionScope: nullableString(versionScope), ObservedAt: nullableString(observedAt), LastVerified: nullableString(lastVerified)}
+			evidence.Temporal = &domain.Temporal{
+				ValidFrom:    nullableString(validFrom),
+				ValidUntil:   nullableString(validUntil),
+				VersionScope: nullableString(versionScope),
+				ObservedAt:   nullableString(observedAt),
+				LastVerified: nullableString(lastVerified),
+			}
 		}
 		result.Evidence = append(result.Evidence, evidence)
 	}

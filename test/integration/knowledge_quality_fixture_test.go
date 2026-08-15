@@ -190,7 +190,10 @@ func assertQualityEvidenceTemporal(t *testing.T, path string) {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got, map[string]string{"ev-e-old": "go1.21", "ev-e-correction": "go1.22+"}) {
+	if !reflect.DeepEqual(got, map[string]string{
+		"ev-e-old":        "go1.21",
+		"ev-e-correction": "go1.22+",
+	}) {
 		t.Fatalf("Evidence Temporal = %#v", got)
 	}
 }
@@ -219,7 +222,10 @@ func assertQualityEvidenceTemporalResponse(t *testing.T, binary string, store de
 	for _, evidence := range response.Data.Evidence {
 		got[evidence.ID] = evidence.Temporal.VersionScope
 	}
-	want := map[string]string{"ev-e-old": "go1.21", "ev-e-correction": "go1.22+"}
+	want := map[string]string{
+		"ev-e-old":        "go1.21",
+		"ev-e-correction": "go1.22+",
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("get-evidence temporal = %#v, want %#v", got, want)
 	}

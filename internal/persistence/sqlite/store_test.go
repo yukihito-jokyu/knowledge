@@ -428,7 +428,10 @@ func TestSchemaStateHandlesCatalogFailures(t *testing.T) {
 						}
 					}
 
-					return &coverageRows{columns: []string{"name"}, values: values}, nil
+					return &coverageRows{
+						columns: []string{"name"},
+						values:  values,
+					}, nil
 				}
 
 				return nil, errors.New("旧schemaの履歴照会失敗")
