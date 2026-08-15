@@ -61,6 +61,47 @@ func TestKnowledgeCLIAtProcessBoundary(t *testing.T) {
 	}
 }
 
+func TestSharedCLIFixtureSeedsEntitiesAndReappliesEmbeddedMigrations(t *testing.T) {
+	fixture := readFixture(t)
+	store := defaultStoreConfiguration(t, t.TempDir())
+	prepareRetrievalDatabase(t, store.Path, fixture.Seed)
+	reopened, err := sqlite.Open(context.Background(), store.Path)
+	if err != nil {
+		t.Fatalf("埋込みmigrationを再適用する: %v", err)
+	}
+	if err := reopened.Close(); err != nil {
+		t.Fatalf("再適用後のStoreを閉じる: %v", err)
+	}
+	database, err := sql.Open("sqlite", store.Path)
+	if err != nil {
+		t.Fatalf("fixture Storeを開く: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	for _, table := range []string{
+		"assertions",
+		"evidence",
+		"concepts",
+		"revision_scopes",
+		"relations",
+		"temporal_metadata",
+	} {
+		var count int
+		if err := database.QueryRowContext(context.Background(), "SELECT count(*) FROM "+table).Scan(&count); err != nil {
+			t.Fatalf("%sを確認する: %v", table, err)
+		}
+		if count == 0 {
+			t.Fatalf("fixtureに%sがありません", table)
+		}
+	}
+	var migrationCount int
+	if err := database.QueryRowContext(context.Background(), "SELECT count(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
+		t.Fatalf("migration履歴を確認する: %v", err)
+	}
+	if migrationCount != 2 {
+		t.Fatalf("migration履歴数 = %d, want 2", migrationCount)
+	}
+}
+
 func readOnlyFixtureCases(cases []cliFixtureCase) []cliFixtureCase {
 	readOnly := make([]cliFixtureCase, 0, len(cases))
 	for _, testCase := range cases {
