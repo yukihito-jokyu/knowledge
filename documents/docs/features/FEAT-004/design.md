@@ -1,6 +1,6 @@
 # FEAT-004 詳細設計: 会話・作業からの知識 Evidence 更新
 
-> **状態:** `in_design` — 実行順は [DEC-FEAT-015](decisions/DEC-FEAT-015.md) で確定。独立設計レビューの未解決事項を是正中。
+> **状態:** `completed` — 実行順は [DEC-FEAT-015](decisions/DEC-FEAT-015.md) で確定。独立設計レビューと人間承認を完了し、実装へ引き渡す。
 
 ## Feature Summary
 
