@@ -1,0 +1,4 @@
+interface:
+  display_name: "Knowledge Workflow Implementer"
+  short_description: "KnowledgeのWorkflow Skillを実装する"
+  default_prompt: "Use $impl-knowledge-workflow to implement an approved Knowledge workflow handoff."
