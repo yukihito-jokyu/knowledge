@@ -17,9 +17,16 @@ features:
     human_design_review: approved
     task_breakdown: completed
     implementation_handoff: ready
+  FEAT-002:
+    design: completed
+    design_review: completed
+    human_design_review: approved # 利用者の「タスクを作成して」（2026-08-15）を詳細設計承認およびTask分解開始の明示指示として記録
+    task_breakdown: completed
+    implementation_handoff: ready
 
-current_feature: FEAT-001
+current_feature: FEAT-002
 pending_decisions: []
 open_change_requests: []
 implementation_ready_features:
   - FEAT-001
+  - FEAT-002
