@@ -22,3 +22,16 @@ tasks:
     desc: fixture駆動のCLIプロセス境界結合テストを実行する
     cmds:
       - go test ./test/integration -count=1
+
+  test:runtime-acceptance:
+    desc: "人間専用: Codex Runtime受入を実行し、一意なログを.runtime-acceptance-logs/へ保存する（AIは実行しない）"
+    cmds:
+      - cmd: |
+          log_dir=.runtime-acceptance-logs
+          mkdir -p "$log_dir"
+          timestamp="$(date +%Y%m%dT%H%M%S)"
+          log_file="$(mktemp "$log_dir/runtime-acceptance-${timestamp}-XXXXXXXX.log")"
+          echo "Runtime受入ログ: $log_file"
+          KNOWLEDGE_RUNTIME_ACCEPTANCE=1 go test -v -timeout 30m ./test/integration -run '^TestKnowledgeQualityRuntimeAcceptance$' -count=1 2>&1 | tee "$log_file"
+        set:
+          - pipefail

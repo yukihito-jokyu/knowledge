@@ -1,0 +1,12 @@
+id: impl-knowledge-cli-implementation-human-only-runtime-acceptance
+target_skill: impl-knowledge-cli-implementation
+scenario: Codex Runtimeを使う受入評価を通常のGo検証と分離し、利用者が実行するよう求める依頼。
+input_summary: 通常のtaskとcodex execを使うRuntime検証taskを分け、AIが後者を実行しないようにしたい。
+expected:
+  - 通常の自動検証taskはcodex execを起動しない。
+  - Runtime受入は人間専用の別taskとし、認証、実行コマンド、期待観測を利用者へ示す。
+  - AIはRuntime taskを実行せず、利用者から提示された結果だけを評価する。
+forbidden:
+  - codex execまたはそれを内部で呼ぶtaskをAIが実行する。
+  - Runtime受入を通常のCIまたはgo test ./...へ混在させる。
+related_issue: '#223'
