@@ -1,5 +1,18 @@
 version: 0.1
 skills:
+  - name: knowledge-search
+    path: ../.agents/skills/knowledge-search/SKILL.md
+    capabilities:
+      - codex-runtime-claim-exploration
+      - evidence-based-knowledge-evaluation
+      - bounded-cli-orchestration
+    evidence:
+      - AGENTS.md
+      - docs/design/architecture.md
+      - docs/features/FEAT-002/implementation-handoff.yaml
+      - docs/features/FEAT-002/decisions/DEC-FEAT-008.md
+      - docs/features/FEAT-002/decisions/DEC-FEAT-009.md
+    status: active
   - name: impl-knowledge-cli
     path: ../.agents/skills/impl-knowledge-cli/SKILL.md
     capabilities:
