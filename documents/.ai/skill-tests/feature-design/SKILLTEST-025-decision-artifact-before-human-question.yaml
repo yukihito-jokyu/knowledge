@@ -1,0 +1,15 @@
+id: SKILLTEST-025
+target_skill: feature-design
+related_issue: human-feedback-2026-08-15-decision-artifact-before-question
+scenario: 利用者判断の前に未決Decisionを記録する
+input_summary: |
+  詳細設計の途中で、回答表示後の後続処理を実行する仕組みが既存契約からは一意に決まらず、
+  利用者が選ぶ必要がある。利用者はまだ選択を返していない。
+expected:
+  - 質問より先にdecisions/DEC-FEAT-*.mdを作成し、状態をpendingまたはproposedとする。
+  - Decisionは用語、現在の状態、事実、未確定理由、選択肢ごとの影響、推奨、承認後に変わる設計資料を平易に記録する。
+  - 会話でDecisionへの参照と必要最小限の判断要約を示す。
+forbidden:
+  - Decision artifactなしに選択肢だけを会話で質問する。
+  - field名や内部実装用語だけで、判断の対象・利用者影響を説明しない。
+version: 0.1
