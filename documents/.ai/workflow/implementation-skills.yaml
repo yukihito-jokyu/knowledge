@@ -1,7 +1,7 @@
 version: 0.1
 skills:
   - name: knowledge-search
-    path: ../.agents/skills/knowledge-search/SKILL.md
+    path: ../skills/knowledge-search/SKILL.md
     capabilities:
       - codex-runtime-claim-exploration
       - evidence-based-knowledge-evaluation

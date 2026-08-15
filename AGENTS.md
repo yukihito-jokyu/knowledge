@@ -7,6 +7,7 @@
 - 製品コードの実装は、このリポジトリ直下で行う。
 - 設計・handoff・要件の正規資料は `documents/docs/` にある。実装時の参照パスは `documents/` を先頭にする。
 - Implementation Skill は `.agents/skills/impl-<scope>/SKILL.md` に置く。実装に必要な再利用可能Skillがなければ `implementation-skill-builder` を使う。1 TaskごとのSkill生成は禁止する。
+- Knowledgeプロダクトに付随するCodex workflow Skillは、リポジトリ直下の `skills/<skill-name>/` に置く。`impl-*` の実装Skillとは分離して管理する。
 - 承認済みの公開CLI/JSON、保存先・設定・運用仕様を、実装の都合で変更または追加しない。設計変更が必要なら `documents/` 配下のDecision Policyに従う。
 
 ## 検証
