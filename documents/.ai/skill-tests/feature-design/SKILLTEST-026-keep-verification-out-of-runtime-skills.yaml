@@ -1,0 +1,16 @@
+id: SKILLTEST-026
+target_skill: feature-design
+related_issue: human-feedback-2026-08-15-keep-verification-out-of-runtime-skills
+scenario: 検証専用Featureで実行用Skillのコンテキストを増やさない
+input_summary: |
+  既存のCLIと複数のWorkflow Skillを変更せずに観測する、固定Fixtureによる
+  受入検証Featureを詳細設計する。既存のテストFixtureとintegration test配置がある。
+expected:
+  - Implementation Deliverables / Placementはテスト専用のFixture、integration test、診断reportの配置だけを変更対象として記録する。
+  - 実行用Skillは被観測対象・依存として参照し、通常利用時のコンテキストを増やす変更対象に含めない。
+  - 実行用Skillの変更は、業務手順または実行時契約の変更が要件で明示される場合だけ記録する。
+forbidden:
+  - Fixture実行や受入oracleのためだけに通常利用時に読み込まれるSkillまたはその参照資料を変更対象にする。
+  - テスト専用の詳細を実行用Skillへ追加し、通常実行のコンテキストを増やす。
+notes: |
+  テストの観測対象であるSkillの契約はfixture oracleから参照してよいが、検証資源の配置先ではない。
