@@ -4,6 +4,13 @@ Skill修正時に追記する。
 
 ## 2026-08-15
 
+- Target Skill: feature-design
+- Symptom: Codex workflow Featureで、論理責務だけを記録し、実装担当者が作成するSkill成果物と固定済みの配置先を判断できなかった。
+- Root Cause: implementation-neutralの規則が、Initial DesignまたはAGENTS.mdで固定済みの配置規約と、利用者が明示的に求めた実装配置の記録まで抑止していた。
+- Change: 固定済み配置規約または利用者の明示要求がある場合、root-relative配置・成果物・責務・依存を`design.md`へ記録する規則を追加した。コード構造の指定は引き続き禁止する。
+- Regression Scenario: SKILLTEST-022
+- Notes: Product固有の配置名をSkillへ固定せず、既存規約または利用者要求を根拠にする。
+
 - Target Skill: knowledge-search
 - Symptom: ユースケース検証のfixture seedとcancel stubを、将来のプロダクト実行にも使うSkill配下へ置いた。
 - Root Cause: 実行Skillの再利用資源と、Task-002-03の検証資源のArtifact Ownershipを分離せず、検証のための便利さを優先した。

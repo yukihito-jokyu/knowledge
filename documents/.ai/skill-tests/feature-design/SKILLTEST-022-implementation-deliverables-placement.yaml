@@ -1,0 +1,18 @@
+id: SKILLTEST-022
+target_skill: feature-design
+related_issue: human-feedback-2026-08-15-feature-implementation-placement
+scenario: 固定済みSkill配置へ実装成果物を明記する
+input_summary: |
+  FeatureはCodex workflowとして実装し、適用中のAGENTS.mdが親リポジトリのskills/<skill-name>/を
+  workflow Skillの配置先として定めている。利用者は実装担当者が作成物と配置先を判断できるよう、
+  詳細設計への明記を求める。
+expected:
+  - design.mdにImplementation Deliverables / Placementを設け、作成するSkill本体と同梱referenceのroot-relative配置先、責務、依存先を記載する。
+  - 固定済みの配置規約に従い、documents配下の設計資料と実行時Skillの配置を区別する。
+  - 既存の依存Skillと、変更しないCLI/DB領域を明記する。
+forbidden:
+  - 「実装時に配置を決める」として実装担当者へ配置判断を委ねる。
+  - function、class、symbol、framework API、未承認の公開契約を指定する。
+notes: |
+  一般には実装中立を保つ。ただし、既に固定された配置規約または利用者の明示要求は、
+  実装可能性に必要な具体性として設計へ反映する。
