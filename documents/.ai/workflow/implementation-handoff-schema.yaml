@@ -60,6 +60,15 @@ design_readiness:
     status: approved
     approved_by: human
     evidence: .ai/workflow/state.yaml#features.FEAT-XXX.human_design_review
+  implementation_readiness_review:
+    # Task分割後、Task作成者と異なるsubagentが親リポジトリ全体を俯瞰して行う実装者視点の読み取りレビュー。
+    # blockerがあればhandoffをreadyにしない。
+    status: complete
+    reviewer: implementation-readiness-review
+    reviewed_by: independent_subagent
+    repository_overview: parent_repository_root
+    result: pass
+    evidence: docs/features/FEAT-XXX/tasks.md#implementation-readiness-review
 
 requirements:
   - REQ-XXX
