@@ -55,9 +55,13 @@
 
 さらに、初回後のArticle AnalysisまたはKnowledge Searchへの限定再調査は合計二回までであることを確認する。二回後に不足が残る場合は、三回目を開始せず、不確実性を`Why`または`Limitations`に残す。Article再調査後にchangedまたはadded Claimを追随評価するKnowledge Searchは、そのArticle再調査に含まれ、追加の再調査回数を消費しない。
 
-### V-004: Knowledge Storeを更新しない
+### V-004: 記事・AI成果物をKnowledge Storeへ保存しない
 
-正常記事、`article_unavailable`、`article_not_evaluable`、Knowledge Searchの`technical_failure`または`canceled`をそれぞれ実行する前後で、隔離したKnowledge Storeの内容と更新操作記録を比較する。記事URL・本文・Article Claim・Assessment・Trace・Reading Value Assessment・AI説明をEvidenceその他の永続データとして追加・更新せず、更新操作がゼロであることを確認する。
+正常記事、`article_unavailable`、`article_not_evaluable`、Knowledge Searchの`technical_failure`または`canceled`をそれぞれ実行する前後で、隔離したKnowledge Storeの内容と更新操作記録を比較する。
+
+- 記事URL・本文・Article Claim・Assessment・Trace・Reading Value Assessment・AI説明をEvidenceその他の永続データとして追加・更新しない。
+- 完成済みAssessmentを持つ正常記事では、当該URL評価中の許可されたユーザー由来Evidenceだけを既存CLIで更新してよい。各更新は、Candidateの`evidence_raw_text`、`evidence_kind`、`observed_at`まで追跡できることを確認する。
+- Assessment未完成の停止経路では、Knowledge Acquisition、Knowledge Update、CLI更新のいずれも開始されず、更新操作がゼロであることを確認する。
 
 ## 停止結果
 
@@ -100,6 +104,24 @@
 ### V-011: 匿名読み取りと非Claim要素の欠落
 
 正常な公開技術記事を、Cookie、認証、セッション、フォーム送信、POSTその他の状態変更なしで取得する。Claim根拠に無関係なナビゲーション、装飾、関連リンクなどだけが欠けるfixtureでは、具体的な欠落を`content_limitations`に記録して評価を続けられることを確認する。中心本文またはClaim根拠が欠ける場合はV-006を優先する。
+
+## 同期更新の受入境界
+
+### V-012: 完成済み本文の後に一回だけ同期更新する
+
+完成済みReading Value Assessment、当該URL評価中の順序付きユーザー寄与、隔離したKnowledge Storeを用意する。本文・推奨・理由の完全な複製を更新開始前に保持し、呼出し順、CLIのargv/stdout/stderr/exit code、Candidate Knowledge、Update Result、返却本文、Store差分を同じcase recordへ記録する。同じ`episode_id`では、Assessment完成後・返却前にKnowledge Acquisitionを一回だけ実行し、正常なAcquisitionの後にKnowledge Updateを一回だけ実行する。空CandidateでもUpdateは一回だけ実行し、retry、restart、callback、別実行を加えない。
+
+| 観測対象 | 入力または状態 | 必須oracle |
+| --- | --- | --- |
+| Evidence境界 | 技術説明、理由付き推論、コード、訂正、自己申告、概念認識、複合寄与、質問のみ、AI説明のみ | `knowledge-acquisition`のV-006〜V-008どおり、許可寄与だけを種類・強度別のCandidateにし、除外入力にはCandidateもDecisionも作らない。 |
+| 検索と順序 | 空Candidate、複数Candidate、重複Assertion ID、空検索結果、`skip`、途中停止 | `knowledge-update`のVU-001〜VU-003、VU-008〜VU-009どおり、検索列とID初出順を保ち、停止後の後続Candidateは`not_started`である。 |
+| 更新と停止 | create、attach、revise、supersede、重複Evidence、conflict、protocol error、exit 130、部分適用、結果不明 | `knowledge-update`のVU-004〜VU-015どおり、Decision / Result、操作記録、履歴保全、停止位置を観測する。 |
+| 本文不変 | `completed`、空Candidate、`skip` Decision、`failed`（`failure_reason: outcome_unknown`を含む）、`canceled`、`partially_applied` | Assessment完成後にAcquisition、続けてUpdateを各一回だけ同期実行し、各結果でも保持した本文・推奨・理由と返却値が完全一致する。`skip`と`outcome_unknown`はDecisionの値であり、Update Resultの全体状態として扱わない。Update Resultは会話出力へ含めない。 |
+| 本文未完成 | `article_unavailable`、`article_not_evaluable`、Knowledge Searchの`technical_failure`または`canceled` | Assessment完成前に停止し、Candidate、Update Result、Acquisition、Update、CLI更新を一切開始しない。 |
+
+### V-013: Workflowの非変更境界
+
+candidate diffと実行記録を確認し、Knowledge CLIの`cmd/knowledge/`、`internal/`、SQLite schema・migration、公開CLIのJSON・option・stdout・stderr・exit codeに変更がないことを確認する。同期更新は既存CLIを消費するだけで、新しいCLI/API/UI、保存先、公開設定、workflow ledger、非同期job、callback、scheduler、自動再実行または再開を追加してはならない。
 
 ## 非変更境界
 
