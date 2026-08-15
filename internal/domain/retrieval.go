@@ -18,6 +18,9 @@ var ErrCreateConflict = errors.New("create conflict")
 // ErrCreateRelationTargetNotFound はRelationの参照先が存在しないことを示す。
 var ErrCreateRelationTargetNotFound = errors.New("create relation target not found")
 
+// ErrMutationConflict は履歴mutationが既存データと衝突したことを示す。
+var ErrMutationConflict = errors.New("mutation conflict")
+
 // Concept は検索アンカーとなるConceptを表す。
 type Concept struct {
 	ID   string
@@ -187,4 +190,51 @@ type CreateResult struct {
 // CreateStore は作成操作が必要とする永続化portである。
 type CreateStore interface {
 	CreateAssertion(context.Context, CreateRequest) (CreateResult, error)
+}
+
+// AttachEvidenceRequest は既存Assertionへ追加する根拠を表す。
+type AttachEvidenceRequest struct {
+	AssertionID string
+	Evidence    CreateEvidence
+}
+
+// AttachEvidenceResult はcommit済みの根拠追加結果を表す。
+type AttachEvidenceResult struct {
+	AssertionID string
+	EvidenceID  string
+}
+
+// ReviseRequest はAssertionの新しいrevisionを表す。
+type ReviseRequest struct {
+	AssertionID    string
+	NormalizedText string
+	Scope          []Scope
+	Temporal       *Temporal
+}
+
+// ReviseResult はcommit済みrevision更新結果を表す。
+type ReviseResult struct {
+	AssertionID      string
+	PreviousRevision int
+	Revision         int
+}
+
+// SupersedeRequest は置換Relationの追加を表す。
+type SupersedeRequest struct {
+	SupersededAssertionID  string
+	ReplacementAssertionID string
+}
+
+// SupersedeResult はcommit済み置換Relationを表す。
+type SupersedeResult struct {
+	RelationID             string
+	SupersededAssertionID  string
+	ReplacementAssertionID string
+}
+
+// HistoryStore は履歴mutationが必要とする永続化portである。
+type HistoryStore interface {
+	AttachEvidence(context.Context, AttachEvidenceRequest) (AttachEvidenceResult, error)
+	ReviseAssertion(context.Context, ReviseRequest) (ReviseResult, error)
+	Supersede(context.Context, SupersedeRequest) (SupersedeResult, error)
 }
