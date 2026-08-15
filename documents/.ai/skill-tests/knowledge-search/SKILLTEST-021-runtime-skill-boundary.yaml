@@ -1,0 +1,11 @@
+id: SKILLTEST-021
+target_skill: knowledge-search
+scenario: 実行Skillと検証fixtureの境界
+input_summary: 将来のClaim評価としてknowledge-searchを起動する。
+expected:
+  - Skillには評価手順、CLI read-only契約、成果物契約だけが同梱される。
+  - fixture seed、cancel stub、E2E手順はdocuments/.ai/skill-tests/knowledge-search/にだけ配置される。
+forbidden:
+  - 実行時のknowledge-searchがfixtureを作成する、CLI write操作を行う、または検証用scriptを参照する。
+  - 実行Skillの都合でテストデータ・テスト専用依存をプロダクト実行経路へ追加する。
+related_issue: '#197'

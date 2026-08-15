@@ -1,59 +1,50 @@
 # FEAT-002 詳細設計レビュー
 
-- **対象:** `FEAT-002 Claim ごとの Agentic Knowledge Assessment` の詳細設計一式
-- **レビュー範囲:** Claim単位の反復探索、7状態のAssessment、Search Trace、既存Knowledge CLI境界、Budget、技術失敗・中断の伝播
+- **対象:** `FEAT-002 Claim ごとの Agentic Knowledge Assessment` の詳細設計一式、およびそれを実装へ渡す `tasks.md` / `implementation-handoff.yaml`
+- **レビュー原典:** Issue #197、REQ-004 / REQ-005 / REQ-019〜021、BR-002 / BR-003 / BR-006 / BR-007 / BR-010、NFR-001〜003 / 005 / 006、CON-002 / 003 / 006、承認済みDecision、Initial Design、FEAT-001の公開CLI契約
 - **総合判定:** **pass**
-- **人間Decision:** 不要。公開契約の追加・変更、L3/L4の未承認Decisionは検出しなかった。
+- **人間Decision:** 不要。利用者は2026-08-15に実装先をKnowledge CLIではなくCodex側workflowとする方針を選択済みであり、L3/L4の未承認Decisionは検出しなかった。
 
 ## 正規根拠台帳
 
 | 根拠 | 確定状態 | 適用範囲 |
 | --- | --- | --- |
-| GitHub Issue #175（要件定義）§6.2、§6.6〜6.8、§8、§12、§14〜21、§42〜45、§49、§52 | confirmed | Evidence起点、Codex/CLI境界、7状態、有限探索、Trace、未観測と未知の分離 |
-| REQ-004、REQ-005、REQ-019〜REQ-021 | confirmed | 探索経路、Assessment、成果物の引渡し、再調査、Budget・Trace |
-| BR-002、BR-003、BR-006、BR-007、BR-010 | confirmed | `no_evidence`、`inferable`、Evidence強度、Relation、責務境界 |
-| NFR-001〜NFR-003、NFR-005〜NFR-006 | confirmed | 説明可能性、有限性、診断可能性、論理契約互換性、受入評価 |
-| CON-002、CON-003、CON-006 | confirmed | 自作CLI、JSON/Markdown境界、物理実装を追加確定しないこと |
-| DEC-REQ-001 | decided (L3) | 初期提供ではSemantic Searchを利用しない |
-| DEC-FEAT-008 | decided (L2) | 1 Claim当たり最大12呼出し、Evidence最大4件、Relation深さ1、矛盾・時点探索の合計最大2回、公開設定を追加しない |
-| FEAT-001 implementation handoff、Command Catalog、各operation設計、DEC-FEAT-006 | approved / ready | 既存11操作、JSON/error/exit code、`Ctrl-C`の無JSON・exit 130契約 |
+| Issue #197 | confirmed | Claimごとの直接探索、限定拡張、7状態、`inferable`、`search-temporal`のselector条件、有限停止、資料同期 |
+| REQ-004、REQ-005、REQ-019〜REQ-021 | confirmed | 反復探索、Assessment、Codexワークフローの成果物引渡し、Budget・Trace |
+| BR-002、BR-003、BR-006、BR-007、BR-010 | confirmed | 未観測と未知の分離、`inferable`、Evidence強度、Relation、Codex/CLI責務境界 |
+| CON-002、CON-003、CON-006 | confirmed | CLIにAI判断を置かないこと、CLI JSON／Codex間Markdown境界、物理実装を要件だけで確定しないこと |
+| DEC-REQ-001 | decided (L3) | 初期提供でSemantic Searchを利用しない |
+| DEC-FEAT-008 | decided (L2) | Claimごとの固定Budget、探索順序、停止条件。公開設定を追加しない |
+| DEC-FEAT-009 | decided (L2) | 評価とAssessment/TraceはCodex側Knowledge Search workflowで実行し、TASK／handoffを再分解する |
+| FEAT-001 Command Catalog、各operation契約、DEC-FEAT-006 | approved / ready | 既存11操作、JSON/error/exit code、response開始前のexit 130・無出力 |
 
 ## 契約根拠トレーサビリティ
 
 | 境界 | 設計上の契約 | 根拠判定 | レビュー結果 |
 | --- | --- | --- | --- |
-| 入力 | 独立評価可能な単一Claimと、明示されたScope・時点だけを受け取る | explicit | 要件・Issueと整合。未指定filterを捏造しない。 |
-| 検索戦略 | 直接字句探索から、構成要素/Concept、Relation、Evidence、矛盾、時点差分へ限定拡張する | explicit / derived | REQ-004、Issue #175 §42、DEC-FEAT-008と整合。`search-semantic`を呼ばない。 |
-| CLI境界 | CLIは既存の検索・取得JSONだけを返し、意味対応、Evidence強度、状態、次queryはCodexが判断する | explicit | BR-010、CON-002/003、FEAT-001 handoffと整合。新規operation・JSON schema・migrationを追加しない。 |
-| Assessment | 7状態の一つ、Confidence、Known、Gap、Evidence、矛盾・時点差分、Trace参照をMarkdownで返す | explicit | REQ-005、NFR-001、Issue #175 §17〜21・§47と整合。`no_evidence`を未知にしていない。 |
-| 状態分類 | `known`と`inferable`を直接性で分離し、Relation単独を根拠にしない | explicit | BR-003、BR-007、Issue #175 §18・§49と整合。 |
-| 通常CLI失敗 | `validation_error`、`not_found`、`storage_error`、`internal_error`、JSONプロトコル不整合は`technical_failure`で停止し、AssessmentなしでTraceとParentへ伝播する | explicit / derived | 本文、Trace、flowchart、sequence diagram、受入設計の記述が同じ分岐で一致する。空配列・未登録Conceptは成功結果であり混同しない。 |
-| CLI中断 | response開始前の`Ctrl-C`によるexit 130・無出力はerror JSON/error codeではなく`canceled`で停止し、Assessmentなしで中断を伝播する | explicit | DEC-FEAT-006、本文、Trace、flowchart、sequence diagram、受入設計のすべてで`technical_failure`から分離されている。Parent自身も中断済みならTraceを出力・保存しない。 |
-| Trace | 操作、入力要約、候補/Evidence ID、増分、Budget、停止理由をAssessmentと分離する | explicit | NFR-003、Issue #175 §43、CON-003と整合。Evidence原文を複製しない。 |
-| Budget | 全CLI呼出し最大12、探索最大4、補助探索最大4、Evidence取得最大4、Relation深さ1、矛盾・時点探索合計最大2 | explicit | DEC-FEAT-008の全上限を本文、Search Trace、受入設計が同じ意味で定める。 |
+| 実行責務 | Claimの意味、query、探索継続、Evidence強度、7状態、Assessment/TraceはCodex Knowledge Searchが担う | explicit | BR-010、CON-002/003、architecture、DEC-FEAT-009と整合。Knowledge CLIへGo実装を追加しない。 |
+| CLI公開I/O / DB / 設定 | 既存read operationだけを既存JSON、stdout/stderr、exit code契約で同期利用する。operation、wire schema、SQLite、migration、公開Budget設定は変えない | explicit | FEAT-001 handoff・Command Catalog・各operation資料と整合。`search-semantic`も呼ばない。 |
+| 入力・通常返却 | 一つの独立評価可能なClaimと明示されたScope/version/時点だけを受け取り、正常時はAssessmentとTrace参照を返す | explicit | workflow契約、Assessment／Trace契約は一致。未指定filterを推測しない。 |
+| 状態判定 | 7状態を優先規則とEvidence原文、Scope、時点、意味対応で区別する。`no_evidence`は未知断定でなく、Relation/候補類似だけは根拠にしない | explicit | Issue #197、REQ-005、BR-002/003/006/007と整合。 |
+| 時点探索 | `search-temporal`はConceptまたはScope selectorがある場合だけ利用する | explicit | Issue #197およびFEAT-001 `search-temporal` validationと整合。 |
+| Budget・停止 | 12呼出し、探索4、補助探索4、Evidence 4、Relation深さ1、矛盾・時点探索合計2。同一論理queryを再実行しない | explicit | DEC-FEAT-008、design、Trace契約、受入設計で一致。 |
+| 技術失敗・中断 | 既存error JSON／プロトコル不整合は`technical_failure`、response開始前のexit 130・無出力は`canceled`としてAssessmentなしでParentへ伝播する | explicit / derived | DEC-FEAT-006と設計・workflow・Traceで一致。空結果は成功結果として分離される。 |
+| 実装handoff | Codex側workflowの実装・検証対象と依存を、CLI Goのapplication/domainから区別して渡す | downstream action | DEC-FEAT-009に従い、利用者の詳細設計承認後のtask-breakdownがTASK／handoffを再分解する。現行Task／handoffは前回設計時点の下流成果物であり、このレビューの不整合ではない。 |
 
 ## 資料間整合監査
 
-| 照合対象 | 結果 |
-| --- | --- |
-| 要件 → Feature Map / Traceability | REQ-004、REQ-005、REQ-019〜021とBR-002、BR-003、BR-006、BR-007、BR-010のFEAT-002割当ては一致する。 |
-| FEAT-002要件 → 設計 / Assessment / Trace | 反復探索、7状態、Evidence根拠、有限Budget、技術失敗の非状態化、Markdown成果物分離は一致する。 |
-| DEC-REQ-001 → CLI利用表 | `search-semantic`を呼ばず、字句・Concept・Relation・Evidence・矛盾・時点差分だけを使うため一致する。 |
-| FEAT-001公開CLI → 操作列 | `search-text`、`search-concept`、`get`、`get-evidence`、`search-related`、`search-contradictions`、`search-temporal`だけを消費する。`search-temporal`はConceptまたはScope selectorが必須のため、時点だけでは実行しない。 |
-| FEAT-001公開CLI → 通常エラーの伝播 | `validation_error`（exit 2）、`not_found`（exit 3）、`storage_error` / `internal_error`（exit 1）は、Assessmentなし→`technical_failure` Trace→Parentへ評価失敗、という一意の経路で本文・Trace・両図・受入設計が一致する。 |
-| FEAT-001公開CLI → 中断の伝播 | response開始前のexit 130・無出力は、error codeなし→`canceled`部分Trace→Assessmentなしの中断伝播で一意に一致する。 |
-| DEC-FEAT-008 → 12回上限 | 4回探索 + 4回補助探索 + 4回Evidence取得は最大12回であり、13回目を禁止する受入設計もある。 |
-| DEC-FEAT-008 → 矛盾・時点探索 | 本文のMain FlowとBudget / Stop Conditionsは両operationを合計2回までとし、到達後はGapへ残す。Traceは`contradiction_temporal_calls: <0..2>`を必須記録し、2到達後の不実行を規定する。受入設計も合計3回目を禁止する。したがって前回R-002は解消済み。 |
-| Scenario A〜J / NFR-006 | 空Store、完全一致、構成知識、矛盾、古い知識、質問/AI説明、競合Evidenceを個別に扱う。横断FixtureセットをFEAT-005が所有する分離もFeature Mapと整合する。 |
+- `requirements.md`、`design.md`、`knowledge-search-workflow.md`、Assessment／Trace契約、DEC-FEAT-008／009の間では、Codex側実行、CLI境界、入出力、Budget、停止、技術失敗／中断の規則が整合する。未承認のCLI公開I/O、SQLite、migration、設定の追加は検出しなかった。
+- FEAT-001の各operation契約と照合した。`search-temporal`のselector必須条件、空結果の成功扱い、既存error、exit 130の扱いに矛盾はない。
+- 現行リポジトリの製品実装はGo CLI（`cmd/knowledge`、`internal/**`、`test/integration`）だけであり、Codex Knowledge Searchを実行する既存workflow artifact／実装先は存在しない。これはCLIを変更する根拠ではない。設計はCodex AI Runtime内の論理workflow、入出力、停止、失敗／中断、成果物境界を定義しており、具体的なartifact・ファイル配置はPlanning/Implementation境界に従い下流で選ぶ。
+- `tasks.md` と `implementation-handoff.yaml` はDEC-FEAT-009前の下流成果物であり、現workflow stateでは更新済み詳細設計の人間承認およびtask-breakdownがまだ完了していない。そのため現時点で実装へ用いてはならない。承認後、task-breakdown ownerがDEC-FEAT-009に従ってTASK-002-01〜03、logical area、依存、handoffをCodex側workflow向けに更新する必要がある。
 
-## 差し戻し事項
+## 下流工程への注意
 
-なし。前回R-002（`search-contradictions`と`search-temporal`の合計上限2回）は、本文・Trace・受入設計へ一貫して反映された。
+- DEC-FEAT-009の影響どおり、利用者がこの更新済み詳細設計を承認した後に、`task-breakdown` ownerは旧Task／handoffをCodex側workflow用へ再分解・更新する。
+- その更新前の`implementation-handoff.yaml`はGo Knowledge CLI実装へ渡してはならない。これは本レビューの`pass`を妨げないが、implementation-readyへ進む前の必須更新である。
 
 ## 総合判定と次のゲート
 
 **判定:** `pass`
 
-承認済みL2 Decisionを含むBudget制約は実装可能な形で資料間一致している。公開CLI/JSON/永続化/設定の追加・変更、未承認のL3/L4 Decision、実装者へ再設計を委ねる欠落は検出しなかった。
-
-**次のゲート:** 利用者によるFEAT-002詳細設計レビューと明示承認。承認前にtask breakdownまたはimplementation handoffへ進めない。
+Codex側へ移す方針、既存CLI契約の消費、実行境界、入出力、Budget／停止、Trace／Assessment、技術失敗／中断の設計は正規根拠に適合する。次のゲートは利用者による更新済み詳細設計の明示承認であり、その後にtask-breakdownを開始する。既存Task／handoffはこの設計の実装開始根拠に使わない。

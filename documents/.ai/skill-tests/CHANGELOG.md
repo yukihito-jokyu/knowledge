@@ -2,6 +2,22 @@
 
 Skill修正時に追記する。
 
+## 2026-08-15
+
+- Target Skill: knowledge-search
+- Symptom: ユースケース検証のfixture seedとcancel stubを、将来のプロダクト実行にも使うSkill配下へ置いた。
+- Root Cause: 実行Skillの再利用資源と、Task-002-03の検証資源のArtifact Ownershipを分離せず、検証のための便利さを優先した。
+- Change: fixture生成・中断stubを`documents/.ai/skill-tests/knowledge-search/scripts/`へ移し、実行Skillには読取りworkflowと同梱契約だけを残した。
+- Regression Scenario: SKILLTEST-021
+- Notes: 実行SkillはCLI write、fixture生成、検証script参照を行わない。
+
+- Target Skill: knowledge-search
+- Symptom: 実行に必要な評価規則とCLI操作契約を、Skill外の設計資料を読む`Required Reading`へ委ねていた。
+- Root Cause: Generated Skillの自己完結性（Input Contract / Procedure）を検査せず、同梱`references/`を操作契約の配布先にしなかった。
+- Change: 外部資料の必須参照を禁止し、評価手順は`SKILL.md`、CLI operation・option・JSON・exit codeは`references/cli-operations.md`へ固定した。
+- Regression Scenario: SKILLTEST-019
+- Notes: 実行時に読む正規契約はSkill本文と同梱リファレンスだけであり、CLIの実行結果は探索対象データとして扱う。
+
 ## 2026-08-13
 
 - Target Skill: design-review, planning-orchestrator, task-breakdown, artifact-map, implementation-handoff schema

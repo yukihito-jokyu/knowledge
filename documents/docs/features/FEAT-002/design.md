@@ -2,11 +2,11 @@
 
 ## Feature Summary
 
-Codex の Knowledge Search が、Article Analysisから渡された一つのTarget Claimを既存の Knowledge CLI で反復探索し、Evidenceに還元できるKnowledge Assessmentを作る。CLIは検索・取得だけを決定論的に実行し、Claimの意味、検索戦略、Evidence強度、状態判定はCodexが担う。
+Codex の Knowledge Search が、Article Analysisから渡された一つのTarget Claimを既存の Knowledge CLI で反復探索し、Evidenceに還元できるKnowledge Assessmentを作る。CLIは検索・取得だけを決定論的に実行し、Claimの意味、検索戦略、Evidence強度、状態判定はCodexが担う。実行形態、成果物の受け渡し、および呼出側への完了・失敗・中断の返却は [Knowledge Search Workflow 契約](design/knowledge-search-workflow.md) に従う。
 
 ## Scope / Out of Scope
 
-対象要件と範囲は [requirements.md](requirements.md) に従う。既存CLIの11操作を消費するだけで、新しいCLI operation、JSON wire schema、SQLite migration、永続Search Trace、公開Budget設定は導入しない。
+対象要件と範囲は [requirements.md](requirements.md) に従う。既存CLIの11操作を消費するだけで、新しいCLI operation、JSON wire schema、SQLite migration、永続Search Trace、公開Budget設定は導入しない。Claim反復探索・Evidence評価・状態判定を Knowledge CLI のGoコードへ実装しない。
 
 ## Related Requirements / Business Rules
 
@@ -201,6 +201,7 @@ Scenario A〜JをまたぐFixtureセットと層別評価の所有はFEAT-005に
 ## Decisions
 
 - [DEC-FEAT-008](decisions/DEC-FEAT-008.md): 固定Budgetと探索順序。
+- [DEC-FEAT-009](decisions/DEC-FEAT-009.md): Codex側Knowledge Searchワークフローとしての実行形態。
 - FEAT-001で承認済みのCLI/SQLite/JSON契約をそのまま消費し、変更しない。
 
 ## Open Issues

@@ -1,0 +1,17 @@
+id: SKILLTEST-019
+target_skill: knowledge-search
+related_issue: ISSUE-197
+scenario: Bundled CLI contract only
+input_summary: |
+  実行環境にFeature設計資料やKnowledge CLIのソースコードを与えず、
+  一つのTarget Claimを評価するよう依頼する。
+expected:
+  - Skill配下のreferences/cli-operations.mdを読み、最初にsearch-textを一回だけ使う
+  - 後続操作のoption、ID受渡し、成功JSON、error JSON、exit codeを同梱資料だけで判断する
+  - Claimに時点がなければ、評価日や現在日時を`search-temporal --at`へ補完しない
+  - 空結果を成功として扱い、technical failureまたはcanceledからAssessmentを作らない
+forbidden:
+  - documents/配下の設計資料、リポジトリのソースコード、URLをRequired Readingとして読む
+  - 同梱リファレンスにないCLI option、operation、JSON fieldを推測する
+notes: |
+  Skillの自己完結性と、CLI契約の実行可能性を検証する。

@@ -8,10 +8,10 @@ design_readiness:
   contracts:
     data:
       status: complete
-      evidence: docs/features/FEAT-002/design/assessment-template.md
+      evidence: docs/features/FEAT-002/design/assessment-template.md および docs/features/FEAT-002/design/search-trace.md
     operations:
       status: complete
-      evidence: docs/features/FEAT-002/design.md#既存cli利用契約
+      evidence: docs/features/FEAT-002/design/knowledge-search-workflow.md および docs/features/FEAT-002/design.md#既存cli利用契約
     retrieval:
       status: complete
       evidence: docs/features/FEAT-002/design.md#behavioral-scenarios
@@ -74,19 +74,19 @@ nonfunctional_requirements:
   - NFR-006
 
 logical_areas:
-  - application / domain
-  - interface / application
+  - "Codex workflow: exploration / evaluation"
+  - "Codex workflow: artifact / failure boundary"
   - verification
 
 tasks:
   - id: TASK-002-01
-    title: Claim反復探索と評価判定を実現する
-    logical_area: application / domain
+    title: Codex Knowledge Searchの探索・評価を実現する
+    logical_area: "Codex workflow: exploration / evaluation"
     depends_on:
       - FEAT-001 implementation handoff
   - id: TASK-002-02
-    title: Assessment・Search Traceと失敗伝播を実現する
-    logical_area: interface / application
+    title: 一時成果物と失敗・中断境界を実現する
+    logical_area: "Codex workflow: artifact / failure boundary"
     depends_on:
       - TASK-002-01
   - id: TASK-002-03
@@ -116,15 +116,17 @@ decisions:
     source: docs/requirements/decisions/DEC-REQ-001.md
   - id: DEC-FEAT-008
     source: docs/features/FEAT-002/decisions/DEC-FEAT-008.md
+  - id: DEC-FEAT-009
+    source: docs/features/FEAT-002/decisions/DEC-FEAT-009.md
   - id: DEC-FEAT-006
     source: docs/features/FEAT-001/decisions/DEC-FEAT-006.md
 
 interfaces_and_contracts:
-  - Article Analysisまたは呼出側は、一つの独立評価可能なTarget Claimと明示されたScope・時点文脈だけを渡す。
-  - Knowledge Searchは既存CLIのsearch-text、search-concept、get、get-evidence、search-related、search-contradictions、search-temporalだけを利用する。
+  - Article Analysisまたは呼出側は、一つの独立評価可能なTarget Claimと明示されたScope・version・時点文脈だけを渡す。これがCodex AI Runtime内のClaimごとの同期workflow開始条件である。
+  - Knowledge SearchはCodex側workflowとして、既存CLIのsearch-text、search-concept、get、get-evidence、search-related、search-contradictions、search-temporalだけを同期利用する。
   - 既存CLIの名前付きoption、success/error JSON、stdout/stderr、exit code契約はFEAT-001資料どおりに扱う。
-  - Assessmentは一つの状態、Confidence、Known、Knowledge Gap、Supporting Evidence、Relation、矛盾、時点差分、結論、Trace参照を持つMarkdown成果物である。
-  - Search Traceは各操作、最小限の入力要約、結果/Evidence ID、増分、Budget、停止理由を持つ別Markdown成果物である。
+  - 正常終了時、Assessmentは一つの状態、Confidence、Known、Knowledge Gap、Supporting Evidence、Relation、矛盾、時点差分、結論、Trace参照を持つMarkdown成果物として、対応する一時的なSearch Trace参照とともに呼出側へ返す。初期提供ではどちらも保存しない。
+  - Search Traceは各操作、最小限の入力要約、結果/Evidence ID、増分、Budget、停止理由を持つ別Markdown成果物である。Evidence原文を不要に複製しない。
   - validation_error、not_found、storage_error、internal_error、JSONプロトコル不整合はtechnical_failureで停止する。response開始前のexit 130・無出力はcanceledで中断を伝播する。
 
 contract_artifacts:
@@ -136,6 +138,10 @@ contract_artifacts:
     source: docs/features/FEAT-002/design/search-trace.md
   - kind: fixed_budget_decision
     source: docs/features/FEAT-002/decisions/DEC-FEAT-008.md
+  - kind: execution_boundary_decision
+    source: docs/features/FEAT-002/decisions/DEC-FEAT-009.md
+  - kind: workflow_contract
+    source: docs/features/FEAT-002/design/knowledge-search-workflow.md
   - kind: existing_cli_operation_contracts
     source: docs/features/FEAT-001/design/commands/
   - kind: existing_cli_database_access_map
@@ -153,6 +159,6 @@ out_of_scope:
   - Knowledge CLIの操作、JSON wire schema、SQLite schema、公開設定、Assessment/Trace永続化の追加・変更。
 
 implementation_notes:
-  - FEAT-001のimplementation handoffがreadyであることを前提に、公開済みCLI契約を変更せず利用する。
-  - Task-002-01からTask-002-03の順序で、探索・判定、成果物/失敗境界、横断検証を積み上げる。
-  - 実装組織化、ファイル配置、symbol、フレームワーク選択はImplementation領域で既存基盤に従って決める。ただし、設計済みの状態分類、Budget、CLI呼出し条件、成果物構造、失敗/中断の振る舞いは変更しない。
+  - 実装先はCodex AI Runtime内のKnowledge Search workflowである。FEAT-001がreadyとして提供する既存CLIを同期利用し、公開済みのoperation、JSON、stdout/stderr、exit codeを変更しない。
+  - Task-002-01からTASK-002-03の順序で、探索・評価、一時成果物/失敗境界、検証を積み上げる。
+  - 実装組織化、ファイル配置、symbol、フレームワーク選択はImplementation領域で既存基盤に従って決める。ただし、設計済みの開始条件、状態分類、Budget、CLI呼出し条件、一時成果物の受渡し、失敗/中断の振る舞いは変更しない。
