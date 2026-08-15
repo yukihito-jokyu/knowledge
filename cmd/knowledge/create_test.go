@@ -135,18 +135,8 @@ func TestExecuteCommandCreate(t *testing.T) {
 	}
 }
 
-func TestExecuteCommandRejectsUnregisteredParsedOperation(t *testing.T) {
-	parsed, err := parseCommand([]string{
-		"attach-evidence",
-		"--assertion-id", "asrt_01",
-		"--evidence-kind", "user_code",
-		"--evidence-text", "evidence",
-		"--evidence-observed-at", "2026-08-14T00:00:00Z",
-	})
-	if err.code != "" {
-		t.Fatalf("attach-evidenceをparseする: %v", err)
-	}
-
+func TestExecuteCommandRejectsUnknownParsedOperation(t *testing.T) {
+	parsed := command{operation: "unknown"}
 	if _, executionError, handled := executeCommand(context.Background(), parsed); handled || executionError.code != "" {
 		t.Fatalf("executeCommand() = %#v, handled=%t", executionError, handled)
 	}
