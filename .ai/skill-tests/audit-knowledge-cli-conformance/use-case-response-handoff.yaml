@@ -1,0 +1,12 @@
+id: audit-knowledge-cli-conformance-use-case-response-handoff
+target_skill: audit-knowledge-cli-conformance
+scenario: CLIの単一コマンドfixtureは存在するが、設計済みuse caseの複数コマンド操作列を実binaryで検証していない。
+input_summary: design/use-casesにはsearch結果のassertion_idやmutation responseのIDを次のget/get-evidenceへ渡す手順があり、integration testは固定IDの単発commandをtable-drivenに実行する。
+expected:
+  - design/use-casesの各操作列を確認し、response由来のIDを同一隔離Store上の次のCLI invocationへ渡す実binary testがあるか照合する。
+  - 個別commandのfixtureが全てPASSしても、操作列の証拠がなければAUD findingをBLOCKEDとして返す。
+  - 対象use caseの全操作を順に実行し、受渡し値と最終状態を観測するtestを最小修正先として示す。
+forbidden:
+  - 固定IDの単一command fixtureだけでuse case全体の利用経路が検証済みと扱う。
+  - CLIが担当しない意味判断や検索戦略をtestへ要求する。
+related_issue: '#185'

@@ -15,3 +15,7 @@
 - `impl-knowledge-cli-implementation`: 利用者確認コマンドの棚卸しを、`testdata/fixtures`の期待I/Oと`test/integration`の実バイナリ検証へ対応付ける手順を追加。Taskfileを期待結果の正本にしない規約と回帰scenarioを追加。
 - `impl-knowledge-cli-implementation`: Goおよびmigration SQLの説明コメント、literal整形、table-driven test、package別statement coverage 100%、SQLite SQL配置とplaceholderの規約・回帰scenarioを追加。
 - `impl-knowledge-cli-implementation`: 最終candidateで`task lint`を含むfull gateを実行し、Implementation Reportへ記録する規約と回帰scenarioを追加。
+
+## 2026-08-15
+
+- `audit-knowledge-cli-conformance`: 単一command fixtureを、設計済みuse caseの検証証拠として誤認しないよう、response由来のIDを同一隔離Store上の次commandへ渡す実binary操作列を確認する規約と回帰scenarioを追加。#185
