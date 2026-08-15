@@ -1,0 +1,34 @@
+id: SKILLTEST-020
+skill: knowledge-search
+purpose: TASK-002-02/03の成果物境界と実CLI fixture評価を固定する。
+setup:
+  fixture_script: documents/.ai/skill-tests/knowledge-search/scripts/seed_e2e_fixture.py
+  fixture_creation: existing Knowledge CLI public write operations only; evaluation itself is read-only
+cases:
+  - case: known
+    expected: completed assessment known and separate trace
+  - case: no_evidence
+    expected: completed assessment no_evidence; no user-knowledge assertion
+  - case: partially_known
+    expected: completed assessment partially_known
+  - case: inferable
+    expected: completed assessment inferable with explicit one-hop relation and evidence path
+  - case: contradicted
+    expected: completed assessment contradicted
+  - case: outdated
+    expected: completed assessment outdated with temporal difference
+  - case: uncertain
+    expected: completed assessment uncertain for unresolved competing evidence
+  - case: validation_error
+    launcher: real CLI with an invalid empty search-text query
+    expected: technical_failure; assessment absent; trace contains error code and no retry
+  - case: canceled
+    launcher: documents/.ai/skill-tests/knowledge-search/scripts/cancel_before_response.py exits 130 before response
+    expected: canceled; assessment absent; partial trace has operation and exit 130, without error code
+assertions:
+  - first operation is search-text with the full Claim
+  - total calls <= 12 and category budgets are respected
+  - no repeated operation and logical query pair
+  - relation depth <= 1 and contradictions plus temporal <= 2
+  - trace does not contain evidence raw_text or a full CLI success response
+  - no persistent output or public CLI contract change is created
