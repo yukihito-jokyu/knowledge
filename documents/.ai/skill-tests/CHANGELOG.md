@@ -4,6 +4,20 @@ Skill修正時に追記する。
 
 ## 2026-08-15
 
+- Target Skill: feature-design
+- Symptom: 人間判断が必要な設計上の未確定事項について、Decisionを作成・提示する前に会話だけで選択を求めた。
+- Root Cause: Human Decision PointsがDecisionの作成・説明・会話での参照順序を必須化していなかった。
+- Change: 人間への質問前に、平易な未決Decisionへ機能・事実・未確定理由・選択肢の影響・推奨・反映先を記録し、会話ではそのDecisionを参照する手順を追加した。
+- Regression Scenario: SKILLTEST-025
+- Notes: 利用者のProduct DecisionをAIが決めず、回答後は同一Decisionを更新する。
+
+- Target Skill: feature-design
+- Symptom: 詳細設計が論理責務だけで完了し、実装成果物の具体的な配置先を利用者が後から質問しなければ確認できなかった。
+- Root Cause: Implementation Deliverables / Placementを、利用者が明示的に求めた場合だけ作る任意規則にしていた。
+- Change: 同節を詳細設計の必須節とし、既存規約で裏付けられるroot-relative配置・責務・依存・変更しない領域を常に記録する。配置を導けない場合はdesign_readyにしない。
+- Regression Scenario: SKILLTEST-024
+- Notes: function、symbol、framework API、根拠のない配置の指定は引き続き禁止する。
+
 - Target Skill: task-breakdown, planning-orchestrator, implementation-handoff schema
 - Symptom: Task分割とhandoffの後に、実装担当者が親リポジトリの実装先・既存依存・適用規約を俯瞰して実装可能性を確認する工程がなかった。
 - Root Cause: Task Breakdownの完了条件が設計の完全性までで、実際の実装基盤・配置・依存契約との接続を独立に反証するpost-task reviewを定義していなかった。
