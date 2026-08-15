@@ -1,0 +1,15 @@
+id: SKILLTEST-024
+target_skill: feature-design
+related_issue: human-feedback-2026-08-15-require-implementation-placement
+scenario: 実装配置を常に詳細設計へ記録する
+input_summary: |
+  利用者はFeatureの詳細設計を依頼する。既存のAGENTS.mdには実行Skillと製品コードの
+  配置規約があり、既存成果物も確認できるが、利用者は実装場所を別途質問していない。
+expected:
+  - design.mdにImplementation Deliverables / Placementがあり、root-relative配置先、責務、依存、変更しない領域を記載する。
+  - 配置先は既存コード、Initial Design、または適用中のAGENTS.mdの根拠に基づく。
+  - 配置を安全に導けない場合は未確定事項と必要なDecision / Change Requestを記録し、design_readyにしない。
+forbidden:
+  - 利用者が質問しなかったことを理由に実装配置の記載を省略する。
+  - function、class、symbol、framework API、根拠のない新規公開契約を指定する。
+version: 0.1

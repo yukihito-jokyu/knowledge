@@ -101,6 +101,16 @@ Featureの性質を分析して、必要な設計だけを行う。
 
 以下の場合は人間判断またはOwner Skillへの差し戻しが必要。
 
+人間へ判断を求める**前に**、対象Featureの`decisions/DEC-FEAT-*.md`へ未決Decisionを作成する。Decisionには、少なくとも次を平易な用語で記録する。
+
+- 判断が必要な機能・現在の状態
+- 既知の事実、未確定事項、AIだけで確定できない理由
+- 選択肢ごとの利用者・公開契約・後続作業への影響
+- 推奨案と、その根拠・他案を採らない理由
+- 承認後に変更する設計資料
+
+会話ではDecisionへのリンクと判断に必要な要約を示す。資料内のfield名や内部実装用語だけを並べた質問、またはDecisionを作らない先行質問をしてはならない。利用者が判断を返したら、同じDecisionを`decided`へ更新し、設計へ反映する。
+
 ### Feature内だがProduct意味を変える
 
 L4として人間へ。
@@ -165,7 +175,7 @@ Featureが境界を跨ぐ場合に必要な契約を定義する。
 
 ただし、Initial Designで技術が固定されていない限り、framework固有の型やfile pathへ落とさない。
 
-実装配置がInitial Designまたは適用中の`AGENTS.md`で固定済みである場合、または利用者が実装成果物と配置先の明記を明示的に求めた場合は、`design.md`に「Implementation Deliverables / Placement」を設ける。作成する実行成果物、そのroot-relative配置先、責務、既存成果物との依存だけを記載する。function/class/symbol、framework API、コード構造は決めない。
+`design.md`には必ず「Implementation Deliverables / Placement」を設ける。既存コード、Initial Design、適用中の`AGENTS.md`から実装先を調査し、作成・変更する実行成果物のroot-relative配置先、責務、既存成果物との依存、変更しない実装領域を記載する。配置規約が未確定で安全に導けない場合は、その未確定事項と解消に必要なDecision / Change Requestを記録し、`design_ready`にしない。function/class/symbol、framework API、コード構造は決めない。
 
 ### 5a. Contract Completeness Gate
 
@@ -234,6 +244,7 @@ Task BreakdownがAcceptance Criteriaを再解釈しなくてよいレベルま�
 - Behavioral Scenarios
 - Selected Design Analyses
 - Responsibilities
+- Implementation Deliverables / Placement
 - State / Interaction（必要な場合）
 - Interfaces / Data
 - Contract Completeness（該当する場合）
@@ -249,7 +260,7 @@ Task BreakdownがAcceptance Criteriaを再解釈しなくてよいレベルま�
 ## Guardrails
 
 - 1 Featureを超えて詳細設計しない
-- `internal/...` のようなfile pathを、固定済みの配置規約または利用者の明示要求なしに決めない
+- Implementation Deliverables / Placementでは、既存コード、Initial Design、適用中の`AGENTS.md`で裏付けられるroot-relative pathだけを記載する。根拠のないpathを推測で追加しない
 - function/class/package単位へTask化しない
 - Initial Designを直接書き換えない
 - 既存コードが偶然そうなっているだけの実装詳細をRequirementへ昇格しない
@@ -258,6 +269,7 @@ Task BreakdownがAcceptance Criteriaを再解釈しなくてよいレベルま�
 
 - Featureの振る舞いが正常・主要異常系まで説明できる
 - 必要な責務・境界・データ・エラーが明示されている
+- Implementation Deliverables / Placementに、実行成果物の配置先・責務・依存・変更しない領域が記録され、配置未確定なら必要なDecision / Change Requestがある
 - 該当する論理契約が、実装者が仕様を再設計せずに実装できる粒度で complete または not_applicable と記録されている
 - 採用済みのSQLite／関係DBまたはJSON CLI／APIについて、DDL相当およびoperation別wire schemaが complete と記録されている
 - 必要なフローチャート・シーケンス図が `design.md` またはそこから参照する補助設計資料にあり、不要な場合は理由が記録されている
