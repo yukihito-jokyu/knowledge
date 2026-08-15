@@ -1,0 +1,4 @@
+interface:
+  display_name: "Knowledge CLI Conformance Auditor"
+  short_description: "Knowledge CLI全体整合性を監査する"
+  default_prompt: "Use $audit-knowledge-cli-conformance to audit a reviewed Knowledge CLI candidate."

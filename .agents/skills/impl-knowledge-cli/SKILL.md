@@ -39,11 +39,14 @@ description: Knowledge CLIのGo実装を、実装前仕様照合・単一writer�
 - FEAT-001または後続Featureで、Knowledge CLIのGoコード、SQLite persistence、migration、派生Index、CLI process integration testを実装・変更する。
 - `cmd/knowledge`、`internal/application`、`internal/domain`、`internal/persistence/sqlite`、`testdata/fixtures`、`test/integration`の責務境界に関わる。
 
+対象handoffの実装deliverableが上記のいずれかを含む場合だけ使う。`skills/` 配下だけを変更するCodex workflowは、このオーケストレーターのwriterへ渡さず、そのworkflowを編集できる実装Skillを使う。該当Skillがない場合は、Implementation Skill Builderで再利用可能なwriter Skillを用意してから開始する。
+
 ## Do Not Use When
 
 - Planning成果物、要件、公開CLI契約、業務規則を新規に決定または変更する。
 - Semantic Search、ローカルEmbedding、Vector Indexを実装する。これらはFEAT-006の承認済み設計が必要である。
 - Codexによる検索戦略、Evidence価値、Knowledge Assessmentなど、CLIが持たない意味判断を実装する。
+- `skills/` 配下だけを変更するKnowledge Acquisition、Knowledge Update、Reading ValueなどのCodex workflow Skillを実装する。
 
 ## Required Inputs
 

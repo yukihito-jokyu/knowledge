@@ -1,0 +1,4 @@
+interface:
+  display_name: "Knowledge CLI Spec Verifier"
+  short_description: "Knowledge CLI仕様の実装可否を照合する"
+  default_prompt: "Use $verify-knowledge-cli-spec to verify an approved Knowledge CLI task."
