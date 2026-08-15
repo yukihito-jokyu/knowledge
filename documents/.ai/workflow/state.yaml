@@ -35,8 +35,14 @@ features:
     human_design_review: approved # 利用者の「タスク分割に進んでください」（2026-08-15）による詳細設計の明示承認
     task_breakdown: completed
     implementation_handoff: ready
+  FEAT-005:
+    design: completed
+    design_review: completed # DEC-FEAT-018反映後の独立レビューpass
+    human_design_review: approved # 利用者の「taskごとにissueを登録して下さい」（2026-08-15）による修正版詳細設計の明示承認
+    task_breakdown: pending
+    implementation_handoff: pending
 
-current_feature: FEAT-004
+current_feature: FEAT-005
 pending_decisions: []
 open_change_requests: []
 implementation_ready_features:

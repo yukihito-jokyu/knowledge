@@ -177,6 +177,8 @@ Featureが境界を跨ぐ場合に必要な契約を定義する。
 
 `design.md`には必ず「Implementation Deliverables / Placement」を設ける。既存コード、Initial Design、適用中の`AGENTS.md`から実装先を調査し、作成・変更する実行成果物のroot-relative配置先、責務、既存成果物との依存、変更しない実装領域を記載する。配置規約が未確定で安全に導けない場合は、その未確定事項と解消に必要なDecision / Change Requestを記録し、`design_ready`にしない。function/class/symbol、framework API、コード構造は決めない。
 
+検証専用Featureでは、Fixture、test、診断reportを実行用のSkill／Workflowへ同居させない。通常利用時に読み込まれるSkillは被観測対象として扱い、既存の業務手順または実行時契約を変更する必要がある場合だけ変更対象へ含める。テスト専用成果物は、既存のテスト／Fixture配置規約へ置く。
+
 ### 5a. Contract Completeness Gate
 
 Featureが次の性質を持つ場合、該当する論理契約を `design.md` で具体化する。実装者またはTaskに仕様の決定を委ねてはならない。
