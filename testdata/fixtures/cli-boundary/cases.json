@@ -276,23 +276,23 @@
     {
       "name": "attach-evidence の最小入力",
       "arguments": ["attach-evidence", "--assertion-id", "asrt_01", "--evidence-kind", "user_code", "--evidence-text", "evidence", "--evidence-observed-at", "2026-08-14T00:00:00Z"],
-      "exit_code": 1,
-      "stdout": "",
-      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"assertion_id": "asrt_01"}},
+      "stderr": null
     },
     {
       "name": "revise の最小入力",
       "arguments": ["revise", "--assertion-id", "asrt_01", "--normalized-text", "channel"],
-      "exit_code": 1,
-      "stdout": "",
-      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"assertion_id": "asrt_01", "previous_revision": 1, "revision": 2}},
+      "stderr": null
     },
     {
       "name": "supersede の最小入力",
       "arguments": ["supersede", "--superseded-assertion-id", "asrt_01", "--replacement-assertion-id", "asrt_02"],
-      "exit_code": 1,
-      "stdout": "",
-      "stderr": {"ok": false, "error": {"code": "internal_error", "message": "操作の実行処理はまだ利用できません"}}
+      "exit_code": 0,
+      "stdout": {"ok": true, "data": {"relation_type": "supersedes", "superseded_assertion_id": "asrt_01", "replacement_assertion_id": "asrt_02"}},
+      "stderr": null
     },
     {
       "name": "必須option不足",
@@ -335,6 +335,55 @@
       "exit_code": 4,
       "stdout": "",
       "stderr": {"ok": false, "error": {"code": "conflict", "message": "同じAssertionを置換できません", "field": "replacement-assertion-id"}}
+    },
+    {
+      "name": "attach-evidence のAssertion未検出",
+      "arguments": ["attach-evidence", "--assertion-id", "missing", "--evidence-kind", "user_code", "--evidence-text", "evidence", "--evidence-observed-at", "2026-08-14T00:00:00Z"],
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "not_found", "message": "Assertionが見つかりません"}}
+    },
+    {
+      "name": "attach-evidence の重複",
+      "arguments": ["attach-evidence", "--assertion-id", "asrt_01", "--evidence-kind", "user_code", "--evidence-text", "evidence", "--evidence-observed-at", "2026-08-14T00:00:00Z"],
+      "exit_code": 4,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "conflict", "message": "履歴更新が既存データと衝突しました"}}
+    },
+    {
+      "name": "revise のAssertion未検出",
+      "arguments": ["revise", "--assertion-id", "missing", "--normalized-text", "channel"],
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "not_found", "message": "Assertionが見つかりません"}}
+    },
+    {
+      "name": "revise の同一revision",
+      "arguments": ["revise", "--assertion-id", "asrt_01", "--normalized-text", "channel"],
+      "exit_code": 4,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "conflict", "message": "履歴更新が既存データと衝突しました"}}
+    },
+    {
+      "name": "supersede のAssertion未検出",
+      "arguments": ["supersede", "--superseded-assertion-id", "missing", "--replacement-assertion-id", "asrt_02"],
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "not_found", "message": "Assertionが見つかりません"}}
+    },
+    {
+      "name": "supersede の既存Relation",
+      "arguments": ["supersede", "--superseded-assertion-id", "asrt_01", "--replacement-assertion-id", "asrt_02"],
+      "exit_code": 4,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "conflict", "message": "履歴更新が既存データと衝突しました"}}
+    },
+    {
+      "name": "supersede の循環",
+      "arguments": ["supersede", "--superseded-assertion-id", "asrt_02", "--replacement-assertion-id", "asrt_01"],
+      "exit_code": 4,
+      "stdout": "",
+      "stderr": {"ok": false, "error": {"code": "conflict", "message": "履歴更新が既存データと衝突しました"}}
     }
   ]
 }
