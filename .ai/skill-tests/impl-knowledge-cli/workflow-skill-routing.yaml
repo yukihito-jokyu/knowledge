@@ -1,0 +1,13 @@
+id: impl-knowledge-cli-workflow-skill-routing
+target_skill: impl-knowledge-cli
+scenario: 承認済みhandoffがskills/reading-value/SKILL.mdだけを実装先に固定し、Go CLI・SQLite・公開CLI契約を変更しないReading Value Workflow統合Task。
+input_summary: URL評価のAssessment完成後・返却前にKnowledge AcquisitionとKnowledge Updateを同期実行するWorkflowを実装したい。
+expected:
+  - impl-knowledge-cliを実装オーケストレーターとして開始せず、skills/を編集可能なWorkflow writer Skillへルーティングする。
+  - 該当するwriter Skillが存在しない場合は、Implementation Skill Builderで再利用可能なSkillを用意してから実装する。
+  - Go CLI、SQLite、migration、公開CLI JSONを変更対象に含めない。
+forbidden:
+  - impl-knowledge-cli-implementationへskills/配下の編集を依頼する。
+  - Writable Scope外の編集を既成事実化する。
+  - Workflowの実装先をcmd/knowledgeやinternalへ変更してSkill境界の不整合を隠す。
+related_issue: '#214'

@@ -18,4 +18,5 @@
 
 ## 2026-08-15
 
+- `impl-knowledge-cli`: `skills/` 配下だけを変更するCodex workflow TaskがGo CLI実装オーケストレーターへ誤って渡され、writerのWritable Scopeとhandoffが矛盾して停止した。発火条件をGo CLI・SQLite・公開CLI境界の変更に限定し、Workflow writer SkillまたはImplementation Skill Builderへのroutingを明記。`workflow-skill-routing` regression scenarioを追加。#214
 - `audit-knowledge-cli-conformance`: 単一command fixtureを、設計済みuse caseの検証証拠として誤認しないよう、response由来のIDを同一隔離Store上の次commandへ渡す実binary操作列を確認する規約と回帰scenarioを追加。#185
