@@ -61,6 +61,372 @@ func TestKnowledgeCLIAtProcessBoundary(t *testing.T) {
 	}
 }
 
+// TestKnowledgeCLIUseCasesAtProcessBoundaryは、各ユースケースのJSON応答を後続操作へ受け渡す。
+func TestKnowledgeCLIUseCasesAtProcessBoundary(t *testing.T) {
+	fixture := readFixture(t)
+	binary := buildCLI(t, false)
+	for _, testCase := range []struct {
+		name string
+		run  func(*testing.T, string, cliFixture)
+	}{
+		{
+			name: "UC-01 text and evidence",
+			run:  assertUseCaseTextAndEvidence,
+		},
+		{
+			name: "UC-02 concept and relation",
+			run:  assertUseCaseConceptAndRelation,
+		},
+		{
+			name: "UC-03 contradictions",
+			run:  assertUseCaseContradictions,
+		},
+		{
+			name: "UC-04 temporal",
+			run:  assertUseCaseTemporal,
+		},
+		{
+			name: "UC-05 create",
+			run:  assertUseCaseCreate,
+		},
+		{
+			name: "UC-06 update history",
+			run:  assertUseCaseUpdateHistory,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.run(t, binary, fixture)
+		})
+	}
+}
+
+func assertUseCaseTextAndEvidence(t *testing.T, binary string, fixture cliFixture) {
+	t.Helper()
+	store := useCaseStore(t, fixture)
+	search := runSuccessCommand(t, binary, store, []string{"search-text", "--query", "channel"})
+	assertGetAndEvidenceReadback(t, binary, store, firstResultAssertionID(t, search, "search-text"))
+}
+
+func assertUseCaseConceptAndRelation(t *testing.T, binary string, fixture cliFixture) {
+	t.Helper()
+	store := useCaseStore(t, fixture)
+	concept := runSuccessCommand(t, binary, store, []string{"search-concept", "--concept", "channel"})
+	seedID := firstResultAssertionID(t, concept, "search-concept")
+	related := runSuccessCommand(t, binary, store, []string{
+		"search-related",
+		"--seed-kind",
+		"assertion",
+		"--seed-id",
+		seedID,
+	})
+	assertGetAndEvidenceReadback(t, binary, store, firstRelatedTargetID(t, related))
+}
+
+func assertUseCaseContradictions(t *testing.T, binary string, fixture cliFixture) {
+	t.Helper()
+	store := useCaseStore(t, fixture)
+	assertContradictionTargetFollowup(t, binary, store)
+}
+
+func assertUseCaseTemporal(t *testing.T, binary string, fixture cliFixture) {
+	t.Helper()
+	store := useCaseStore(t, fixture)
+	temporal := runSuccessCommand(t, binary, store, []string{"search-temporal", "--concept", "channel"})
+	assertGetAndEvidenceReadback(t, binary, store, firstResultAssertionID(t, temporal, "search-temporal"))
+}
+
+func assertUseCaseCreate(t *testing.T, binary string, fixture cliFixture) {
+	t.Helper()
+	store := useCaseStore(t, fixture)
+	search := runSuccessCommand(t, binary, store, []string{"search-text", "--query", "use-case-create"})
+	if results := responseArray(t, responseData(t, search), "results"); len(results) != 0 {
+		t.Fatalf("create前のsearch-text results = %#v, want empty", results)
+	}
+	created := runSuccessCommand(t, binary, store, createUseCaseArguments("use-case-create assertion"))
+	createdData := responseData(t, created)
+	assertionID := responseString(t, createdData, "assertion_id")
+	evidenceIDs := responseStringArray(t, createdData, "evidence_ids")
+	assertAssertionReadback(t, binary, store, assertionID)
+	assertEvidenceReadback(t, binary, store, assertionID, evidenceIDs[0])
+}
+
+func assertUseCaseUpdateHistory(t *testing.T, binary string, fixture cliFixture) {
+	t.Helper()
+	store := useCaseStore(t, fixture)
+	attached := runSuccessCommand(t, binary, store, []string{
+		"attach-evidence",
+		"--assertion-id",
+		"asrt_01",
+		"--evidence-kind",
+		"correction",
+		"--evidence-text",
+		"use-case attached evidence",
+		"--evidence-observed-at",
+		"2026-08-15T00:00:00Z",
+	})
+	attachedData := responseData(t, attached)
+	assertEvidenceReadback(t, binary, store, responseString(t, attachedData, "assertion_id"), responseString(t, attachedData, "evidence_id"))
+
+	revised := runSuccessCommand(t, binary, store, []string{
+		"revise",
+		"--assertion-id",
+		responseString(t, attachedData, "assertion_id"),
+		"--normalized-text",
+		"use-case revised assertion",
+	})
+	revisedData := responseData(t, revised)
+	revisedID := responseString(t, revisedData, "assertion_id")
+	get := runSuccessCommand(t, binary, store, []string{"get", "--assertion-id", revisedID})
+	getData := responseData(t, get)
+	if current := responseNumber(t, getData, "current_revision"); current != responseNumber(t, revisedData, "revision") {
+		t.Fatalf("revise current_revision = %v, want response revision %v", current, responseNumber(t, revisedData, "revision"))
+	}
+	assertRevisionHistory(t, getData, responseNumber(t, revisedData, "previous_revision"), responseNumber(t, revisedData, "revision"))
+
+	created := runSuccessCommand(t, binary, store, createUseCaseArguments("use-case replacement assertion"))
+	replacementID := responseString(t, responseData(t, created), "assertion_id")
+	superseded := runSuccessCommand(t, binary, store, []string{
+		"supersede",
+		"--superseded-assertion-id",
+		revisedID,
+		"--replacement-assertion-id",
+		replacementID,
+	})
+	supersededData := responseData(t, superseded)
+	assertAssertionReadback(t, binary, store, responseString(t, supersededData, "superseded_assertion_id"))
+	assertAssertionReadback(t, binary, store, responseString(t, supersededData, "replacement_assertion_id"))
+}
+
+func useCaseStore(t *testing.T, fixture cliFixture) defaultStore {
+	t.Helper()
+	store := defaultStoreConfiguration(t, t.TempDir())
+	prepareRetrievalDatabase(t, store.Path, fixture.Seed)
+
+	return store
+}
+
+func createUseCaseArguments(normalizedText string) []string {
+	return []string{
+		"create",
+		"--normalized-text",
+		normalizedText,
+		"--evidence-kind",
+		"user_code",
+		"--evidence-text",
+		"use-case evidence",
+		"--evidence-observed-at",
+		"2026-08-15T00:00:00Z",
+	}
+}
+
+func runSuccessCommand(t *testing.T, binary string, store defaultStore, arguments []string) map[string]any {
+	t.Helper()
+	stdout, stderr, err := runCommand(binary, store.Environment, arguments)
+	if err != nil {
+		t.Fatalf("%s = %v", arguments[0], err)
+	}
+	assertStderr(t, stderr, nil)
+	var response map[string]any
+	if err := json.Unmarshal([]byte(stdout), &response); err != nil {
+		t.Fatalf("%s response JSONを復号する: %v", arguments[0], err)
+	}
+	if ok, found := response["ok"].(bool); !found || !ok {
+		t.Fatalf("%s response = %#v", arguments[0], response)
+	}
+	responseData(t, response)
+
+	return response
+}
+
+func assertGetAndEvidenceReadback(t *testing.T, binary string, store defaultStore, assertionID string) {
+	t.Helper()
+	assertAssertionReadback(t, binary, store, assertionID)
+	assertEvidenceReadback(t, binary, store, assertionID, "")
+}
+
+func assertAssertionReadback(t *testing.T, binary string, store defaultStore, assertionID string) {
+	t.Helper()
+	get := runSuccessCommand(t, binary, store, []string{"get", "--assertion-id", assertionID})
+	if actual := responseString(t, responseData(t, get), "assertion_id"); actual != assertionID {
+		t.Fatalf("get assertion_id = %q, want %q", actual, assertionID)
+	}
+}
+
+func assertEvidenceReadback(t *testing.T, binary string, store defaultStore, assertionID string, evidenceID string) {
+	t.Helper()
+	evidence := runSuccessCommand(t, binary, store, []string{"get-evidence", "--assertion-id", assertionID})
+	data := responseData(t, evidence)
+	if actual := responseString(t, data, "assertion_id"); actual != assertionID {
+		t.Fatalf("get-evidence assertion_id = %q, want %q", actual, assertionID)
+	}
+	if evidenceID == "" {
+		return
+	}
+	for _, item := range responseArray(t, data, "evidence") {
+		if responseString(t, responseObject(t, item), "evidence_id") == evidenceID {
+			return
+		}
+	}
+	t.Fatalf("get-evidenceに追加済みevidence_id %qがありません", evidenceID)
+}
+
+func firstResultAssertionID(t *testing.T, response map[string]any, operation string) string {
+	t.Helper()
+	results := responseArray(t, responseData(t, response), "results")
+	if len(results) == 0 {
+		t.Fatalf("%s resultsが空です", operation)
+	}
+
+	return responseString(t, responseObject(t, results[0]), "assertion_id")
+}
+
+func firstRelatedTargetID(t *testing.T, response map[string]any) string {
+	t.Helper()
+	results := responseArray(t, responseData(t, response), "results")
+	if len(results) == 0 {
+		t.Fatal("search-related resultsが空です")
+	}
+
+	return responseString(t, responseObject(t, responseObject(t, results[0])["target"]), "id")
+}
+
+func responseData(t *testing.T, response map[string]any) map[string]any {
+	t.Helper()
+
+	return responseObject(t, response["data"])
+}
+
+func responseObject(t *testing.T, value any) map[string]any {
+	t.Helper()
+	object, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("response object = %#v", value)
+	}
+
+	return object
+}
+
+func responseArray(t *testing.T, data map[string]any, key string) []any {
+	t.Helper()
+	values, ok := data[key].([]any)
+	if !ok {
+		t.Fatalf("response %s = %#v", key, data[key])
+	}
+
+	return values
+}
+
+func responseStringArray(t *testing.T, data map[string]any, key string) []string {
+	t.Helper()
+	values := responseArray(t, data, key)
+	if len(values) == 0 {
+		t.Fatalf("response %sが空です", key)
+	}
+	strings := make([]string, 0, len(values))
+	for _, value := range values {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			t.Fatalf("response %s value = %#v", key, value)
+		}
+		strings = append(strings, stringValue)
+	}
+
+	return strings
+}
+
+func responseString(t *testing.T, data map[string]any, key string) string {
+	t.Helper()
+	value, ok := data[key].(string)
+	if !ok || value == "" {
+		t.Fatalf("response %s = %#v", key, data[key])
+	}
+
+	return value
+}
+
+func responseNumber(t *testing.T, data map[string]any, key string) float64 {
+	t.Helper()
+	value, ok := data[key].(float64)
+	if !ok {
+		t.Fatalf("response %s = %#v", key, data[key])
+	}
+
+	return value
+}
+
+func assertRevisionHistory(t *testing.T, data map[string]any, previousRevision float64, revision float64) {
+	t.Helper()
+	foundPrevious := false
+	foundRevision := false
+	for _, item := range responseArray(t, data, "revisions") {
+		revisionData := responseObject(t, item)
+		switch responseNumber(t, revisionData, "revision") {
+		case previousRevision:
+			foundPrevious = true
+		case revision:
+			if responseString(t, revisionData, "normalized_text") != "use-case revised assertion" {
+				t.Fatalf("revise normalized_text = %q, want %q", responseString(t, revisionData, "normalized_text"), "use-case revised assertion")
+			}
+			foundRevision = true
+		}
+	}
+	if !foundPrevious || !foundRevision {
+		t.Fatalf("get revisionsにprevious=%vとrevision=%vが共存しません: %#v", previousRevision, revision, data["revisions"])
+	}
+}
+
+// assertContradictionTargetFollowupは、矛盾候補のtargetを取得操作へそのまま渡せることを確認する。
+func assertContradictionTargetFollowup(t *testing.T, binary string, store defaultStore) {
+	t.Helper()
+	stdout, stderr, err := runCommand(binary, store.Environment, []string{
+		"search-contradictions",
+		"--assertion-id",
+		"asrt_02",
+	})
+	if err != nil {
+		t.Fatalf("search-contradictions = %v", err)
+	}
+	assertStderr(t, stderr, nil)
+	var response struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Results []struct {
+				Target struct {
+					ID string `json:"id"`
+				} `json:"target"`
+			} `json:"results"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &response); err != nil || !response.OK || len(response.Data.Results) != 1 || response.Data.Results[0].Target.ID == "" {
+		t.Fatalf("search-contradictions response = %q, %#v, %v", stdout, response, err)
+	}
+	targetID := response.Data.Results[0].Target.ID
+	for _, arguments := range [][]string{
+		{
+			"get",
+			"--assertion-id",
+			targetID,
+		},
+		{
+			"get-evidence",
+			"--assertion-id",
+			targetID,
+		},
+	} {
+		stdout, stderr, err := runCommand(binary, store.Environment, arguments)
+		if err != nil {
+			t.Fatalf("%s target follow-up = %v", arguments[0], err)
+		}
+		assertStderr(t, stderr, nil)
+		var success struct {
+			OK bool `json:"ok"`
+		}
+		if err := json.Unmarshal([]byte(stdout), &success); err != nil || !success.OK {
+			t.Fatalf("%s target follow-up response = %q, %#v, %v", arguments[0], stdout, success, err)
+		}
+	}
+}
+
 func TestSharedCLIFixtureSeedsEntitiesAndReappliesEmbeddedMigrations(t *testing.T) {
 	fixture := readFixture(t)
 	store := defaultStoreConfiguration(t, t.TempDir())
