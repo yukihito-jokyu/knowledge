@@ -2,7 +2,7 @@
 
 ## 目的
 
-Article Claim を入力として、Codex が既存 Knowledge CLI を反復利用し、ユーザーの知識状態を根拠付きで評価する。結果は後続の Reading Value が再判定せず利用できる Knowledge Assessment と、診断用の Search Trace に分離する。
+Article Claim を入力として、Codex 側の Knowledge Search ワークフローが既存 Knowledge CLI を反復利用し、ユーザーの知識状態を根拠付きで評価する。結果は後続の Reading Value が再判定せず利用できる Knowledge Assessment と、診断用の Search Trace に分離する。
 
 ## 含む要件
 
@@ -27,3 +27,4 @@ Article Claim を入力として、Codex が既存 Knowledge CLI を反復利用
 - Conversation / Task Episode からのEvidence候補抽出・知識更新（FEAT-004）。
 - Semantic Search、Embedding、Vector Index（FEAT-006）。
 - Knowledge CLI の操作、JSON wire schema、SQLite schema、公開設定の追加・変更。
+- Claimの意味対応、探索順序、Evidence強度、7状態の判定を Knowledge CLI のGo実装へ追加すること。これらはCodex側ワークフローの責務である。
