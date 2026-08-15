@@ -9,7 +9,7 @@ Codex会話で受けた技術記事URL一件を、Article Analysis、Claimごと
 
 ## 開始
 
-開始前に、必ず[Article Analysis契約](references/article-analysis.md)、[Reading Value統合契約](references/reading-value.md)、既存`skills/knowledge-search/`の`SKILL.md`とAssessment / Search Trace契約を読む。利用者入力は一件の絶対HTTP(S) URLだけとし、fragmentは同一記事内の位置補助として扱う。空、複数、相対URL、HTTP(S)以外は接続せず、入力を一件の絶対HTTP(S) URLとして指定し直すよう求める。
+開始前に、必ず[Article Analysis契約](references/article-analysis.md)、[Reading Value統合契約](references/reading-value.md)、[検証契約](references/verification.md)、既存`skills/knowledge-search/`の`SKILL.md`とAssessment / Search Trace契約を読む。利用者入力は一件の絶対HTTP(S) URLだけとし、fragmentは同一記事内の位置補助として扱う。空、複数、相対URL、HTTP(S)以外は接続せず、入力を一件の絶対HTTP(S) URLとして指定し直すよう求める。
 
 ## 手順
 
@@ -27,6 +27,8 @@ Codex会話で受けた技術記事URL一件を、Article Analysis、Claimごと
 正常時は一件のReading Value Assessmentを会話内へ返す。Article Analysis、Knowledge Assessment、Search Trace、Assessment Mapは実行中のMarkdown成果物だけとして扱う。Map外のClaim、Assessment、Traceを最終評価の根拠に使わない。記事全体の品質順位、真偽断定、利用者の熟達度判定は行わない。
 
 ## 検証
+
+受入・安全境界の再現手順と観測oracleは、[検証契約](references/verification.md)に従う。
 
 - 初期URLと全redirectが、接続前に検査されていることを確認する。
 - 接続が検査済みIPに固定され、接続時にhostnameを再名前解決しないことを確認する。
