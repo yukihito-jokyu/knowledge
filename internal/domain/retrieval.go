@@ -108,6 +108,7 @@ type Evidence struct {
 	Kind       string
 	RawText    string
 	ObservedAt string
+	Temporal   *Temporal
 }
 
 // EvidenceResult はEvidence取得結果を表す。

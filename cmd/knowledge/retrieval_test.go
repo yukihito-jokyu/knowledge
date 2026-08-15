@@ -514,6 +514,21 @@ func TestRetrievalResponse(t *testing.T) {
 			}
 		})
 	}
+	response := retrievalResponse(domain.EvidenceResult{
+		AssertionID: "asrt_01",
+		Evidence: []domain.Evidence{{
+			ID: "evd_temporal",
+			Temporal: &domain.Temporal{
+				VersionScope: &value,
+			},
+		}},
+	}).(map[string]any)
+	evidence := response["evidence"].([]map[string]any)
+	temporal, ok := evidence[0]["temporal"].(map[string]any)
+	versionScope, hasVersionScope := temporal["version_scope"].(*string)
+	if !ok || !hasVersionScope || versionScope == nil || *versionScope != value {
+		t.Fatalf("Evidence Temporal response = %#v", response)
+	}
 	for _, tt := range []struct {
 		name string
 		call func() any
