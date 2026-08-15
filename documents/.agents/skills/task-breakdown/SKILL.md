@@ -169,7 +169,16 @@ Feature Designから「実装後に成立していなければならないこと
 - Design readiness audit と契約成果物への参照
 - Out of Scope
 
-### 8. Technology Leakage Check
+### 8. 実装者視点の独立実装可能性レビュー
+
+`tasks.md` と `implementation-handoff.yaml` のdraftを作成した後、implementation-readyへ進める前に、Task作成者とは異なるfreshなsubagentへ読み取り専用レビューを委譲する。
+
+- reviewerには、`documents/`だけで判断せず、**親リポジトリのrootから全体を俯瞰して確認する**よう明示する。親リポジトリ外に実装対象がある場合も、実装先、依存先、適用される`AGENTS.md`、既存コード／Skill、検証手順をそのrootから照合する。
+- reviewerは実装担当者の立場で、作成物と配置先、既存依存との入力・出力契約、Task順序、受入oracle、固定済みの公開契約・外部安全境界を反証的に確認する。Taskやhandoffを編集しない。
+- blocker（実装先・責務・依存契約・検証方法の欠落、承認済み契約との矛盾、実装時に再設計が必要な未決定事項）があれば、Taskをreadyにせず、根拠とともに該当Ownerへ差し戻す。
+- blockerがなければ、reviewer、親リポジトリ俯瞰の範囲、判定、根拠を`tasks.md`のImplementation Readiness Review節とhandoffの`implementation_readiness_review`へ記録する。evidenceにより確認できない軽微な指摘は採用しない。
+
+### 9. Technology Leakage Check
 
 以下がTaskへ漏れていないか確認する。
 
@@ -198,6 +207,7 @@ Feature Designから「実装後に成立していなければならないこと
 - Operation Documentation Coverage Gateが該当する場合、operation別資料・DBリファレンス・access map・図の監査結果がhandoffから参照可能である
 - 独立した設計レビューが `pass` であり、handoffからレビュー成果物を参照できる
 - 利用者の詳細設計承認があり、handoffから承認記録を参照できる
+- Task分割後の独立した実装可能性レビューがpassであり、親リポジトリ俯瞰の範囲と根拠をtasks/handoffから参照できる
 - 不要なTechnology-specific detailがない
 - Dependencyが説明可能
 - `implementation-handoff.yaml` 単体でImplementation領域が計画内容を把握できる

@@ -4,6 +4,20 @@ Skill修正時に追記する。
 
 ## 2026-08-15
 
+- Target Skill: task-breakdown, planning-orchestrator, implementation-handoff schema
+- Symptom: Task分割とhandoffの後に、実装担当者が親リポジトリの実装先・既存依存・適用規約を俯瞰して実装可能性を確認する工程がなかった。
+- Root Cause: Task Breakdownの完了条件が設計の完全性までで、実際の実装基盤・配置・依存契約との接続を独立に反証するpost-task reviewを定義していなかった。
+- Change: Task分割後、親リポジトリrootから全体を俯瞰するよう明示したfreshなsubagentによる実装者視点レビューを必須化し、結果をtasks/handoffへ記録してからreadyにする規則とhandoff項目を追加した。
+- Regression Scenario: SKILLTEST-023
+- Notes: reviewerは読み取り専用であり、Taskやhandoffの編集、未承認の実装設計の追加を行わない。
+
+- Target Skill: feature-design
+- Symptom: Codex workflow Featureで、論理責務だけを記録し、実装担当者が作成するSkill成果物と固定済みの配置先を判断できなかった。
+- Root Cause: implementation-neutralの規則が、Initial DesignまたはAGENTS.mdで固定済みの配置規約と、利用者が明示的に求めた実装配置の記録まで抑止していた。
+- Change: 固定済み配置規約または利用者の明示要求がある場合、root-relative配置・成果物・責務・依存を`design.md`へ記録する規則を追加した。コード構造の指定は引き続き禁止する。
+- Regression Scenario: SKILLTEST-022
+- Notes: Product固有の配置名をSkillへ固定せず、既存規約または利用者要求を根拠にする。
+
 - Target Skill: knowledge-search
 - Symptom: ユースケース検証のfixture seedとcancel stubを、将来のプロダクト実行にも使うSkill配下へ置いた。
 - Root Cause: 実行Skillの再利用資源と、Task-002-03の検証資源のArtifact Ownershipを分離せず、検証のための便利さを優先した。

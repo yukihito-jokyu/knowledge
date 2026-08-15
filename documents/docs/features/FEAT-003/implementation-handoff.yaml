@@ -1,0 +1,185 @@
+feature: FEAT-003
+name: URL記事の読書価値評価
+planning_status: ready
+
+design_readiness:
+  audited_by: task-breakdown
+  status: complete
+  contracts:
+    data:
+      status: complete
+      evidence: docs/features/FEAT-003/design/article-analysis-template.md および docs/features/FEAT-003/design/reading-value-template.md
+    operations:
+      status: complete
+      evidence: docs/features/FEAT-003/design.md#interaction および docs/features/FEAT-003/decisions/DEC-FEAT-010.md
+    retrieval:
+      status: complete
+      evidence: docs/features/FEAT-003/decisions/DEC-FEAT-012.md および docs/features/FEAT-003/design/article-analysis-template.md
+    migration:
+      status: not_applicable
+      evidence: FEAT-003はCodex workflow Skillを新設するだけで、SQLite schemaまたはmigrationを変更しない。
+    fixtures:
+      status: complete
+      evidence: docs/features/FEAT-003/design.md#acceptance--test-design および docs/features/FEAT-003/decisions/DEC-FEAT-012.md
+  format_schemas:
+    relational_ddl:
+      status: not_applicable
+      evidence: 永続化データを新設・変更しない。
+    json_operations:
+      status: not_applicable
+      evidence: 新しい公開CLI/API/JSON operationを追加・変更しない。
+  diagrams:
+    flowchart:
+      status: complete
+      evidence: docs/features/FEAT-003/design.md#interaction
+    sequence:
+      status: complete
+      evidence: docs/features/FEAT-003/design.md#interaction
+  operation_documentation:
+    status: not_applicable
+    evidence: FEAT-003はCodex会話内のWorkflowを新設し、公開CLI/API/DB operationを追加・変更しない。既存Knowledge Searchとの受渡しはdesign.mdとtemplateに固定する。
+  independent_design_review:
+    status: complete
+    reviewer: design-review
+    reviewed_by: independent_subagent
+    result: pass
+    evidence: docs/features/FEAT-003/design-review.md
+  human_design_review:
+    status: approved
+    approved_by: human
+    evidence: .ai/workflow/state.yaml#features.FEAT-003.human_design_review
+
+requirements:
+  - REQ-001
+  - REQ-002
+  - REQ-003
+  - REQ-006
+  - REQ-007
+  - REQ-008
+  - REQ-019
+  - REQ-020
+business_rules:
+  - BR-001
+  - BR-003
+  - BR-009
+  - BR-010
+nonfunctional_requirements:
+  - NFR-001
+  - NFR-002
+  - NFR-003
+  - NFR-005
+  - NFR-006
+
+implementation_deliverables:
+  root: skills/reading-value/
+  items:
+    - path: skills/reading-value/SKILL.md
+      responsibility: URL一件の会話入力から記事分析、Claim評価、Markdown推奨までを統合するWorkflow。
+    - path: skills/reading-value/references/article-analysis.md
+      responsibility: 公開URL検査、検査済みIP固定、redirect、本文成立性、Article Claim、再調査照合の契約。
+    - path: skills/reading-value/references/reading-value.md
+      responsibility: Assessment Map、再利用／無効化、読書推奨、最終Markdown出力の契約。
+    - path: skills/reading-value/references/verification.md
+      responsibility: 通常、失敗、再調査、安全境界の受入検証契約。
+  dependency:
+    path: skills/knowledge-search/
+    responsibility: ClaimごとのKnowledge AssessmentとSearch Traceを返す既存Workflow。
+  excluded_locations:
+    - cmd/
+    - internal/
+    - SQLite migration
+    - 公開CLI JSON
+
+logical_areas:
+  - "Codex workflow: article acquisition / analysis"
+  - "Codex workflow: assessment orchestration / recommendation"
+  - verification
+
+tasks:
+  - id: TASK-003-01
+    title: 安全な記事取得とArticle Analysisを実現する
+    logical_area: "Codex workflow: article acquisition / analysis"
+    depends_on: []
+  - id: TASK-003-02
+    title: Claim評価統合・再調査・読書推奨を実現する
+    logical_area: "Codex workflow: assessment orchestration / recommendation"
+    depends_on:
+      - TASK-003-01
+      - FEAT-002 implementation handoff
+  - id: TASK-003-03
+    title: Reading Value Workflowの受入・安全境界を検証する
+    logical_area: verification
+    depends_on:
+      - TASK-003-01
+      - TASK-003-02
+
+acceptance_criteria:
+  - Codex会話で一件の技術記事URLを受け、Article Claimとその位置・支援根拠を作成する。新しいCLI/API/UI、DB、公開設定を追加しない。
+  - URLと全redirectは接続前に公開HTTP(S)の既定port・userinfoなし・公開到達可能解決先として検査し、検査済みIPへ接続先を固定して再名前解決しない。保証不能時はarticle_unavailableで停止する。
+  - Claim IDごとに正常Assessment一件とSearch Trace一件をAssessment Mapで追跡でき、技術失敗または中断Claimを含む場合はReading Value Assessmentを出力しない。
+  - 利用者固有の既知／未知、推論可能性、Claim重要度、支援根拠だけからread_full、read_selected、skipを決定する。
+  - 記事再調査は合計二回までとし、Claim、scope、target version、temporal contextがすべて同一のClaimだけAssessmentを再利用する。changed／addedは再評価し、removedは除外する。
+  - 本文またはClaim根拠が不足する記事、内部宛先・不適格redirect・DNS再解決の危険がある記事はarticle_unavailableとして部分評価せず停止する。評価可能なClaimを抽出できない記事はarticle_not_evaluableとして停止する。非Claim要素だけの欠落はcontent_limitationsとして明示できる。
+  - 通常・失敗・再調査・安全境界をfixtureで再現し、Knowledge CLIの公開CLI JSON、SQLite migration、cmd/、internal/、公開設定が変更されないことを確認する。
+
+constraints:
+  - 実装本体は親リポジトリのskills/reading-value/にのみ新設する。documents/docs/features/FEAT-003/は設計・handoffの正規資料である。
+  - 既存skills/knowledge-search/はClaim単位のAssessment／Traceを返す依存先としてのみ利用し、記事取得・推奨を追加しない。
+  - 記事取得はDEC-FEAT-012に従い、検査済みIPへの固定と接続時の再名前解決禁止を保証できる能力だけを使う。保証不能ならarticle_unavailableで停止する。
+  - Assessment Mapと最終推奨はClaim IDを唯一の結合キーとし、自由文の推測によってAssessmentやTraceを結び直さない。
+  - 記事再調査の合計上限は二回であり、Knowledge Assessmentの再実行は記事再調査回数を消費しない。
+  - 実装Taskは承認済みの配置以外のfile path、symbol、framework API、ライブラリ固有の構造を指示しない。
+
+decisions:
+  - id: DEC-REQ-001
+    source: docs/requirements/decisions/DEC-REQ-001.md
+  - id: DEC-FEAT-008
+    source: docs/features/FEAT-002/decisions/DEC-FEAT-008.md
+  - id: DEC-FEAT-009
+    source: docs/features/FEAT-002/decisions/DEC-FEAT-009.md
+  - id: DEC-FEAT-010
+    source: docs/features/FEAT-003/decisions/DEC-FEAT-010.md
+  - id: DEC-FEAT-011
+    source: docs/features/FEAT-003/decisions/DEC-FEAT-011.md
+  - id: DEC-FEAT-012
+    source: docs/features/FEAT-003/decisions/DEC-FEAT-012.md
+
+interfaces_and_contracts:
+  - Codex会話は一件の絶対技術記事URLを入力とし、成功時はReading Value Assessment Markdown、失敗時は設計済みの停止理由を返す。専用CLI/API/UIは作らない。
+  - Article AnalysisはArticle Claim ID、Claim、Role、Importance、Location、Support、該当時のscope、target version、temporal context、content_limitations、Claim Reconciliationを提供する。評価可能なClaimがない場合はarticle_not_evaluableとして停止し、推奨を作らない。
+  - 記事取得は初期URL・全redirect・解決先を接続前に検査し、検査済みIPだけへ固定接続する。再名前解決、認証、Cookie、状態変更は許可しない。
+  - 各Article Claimは既存skills/knowledge-search/へ渡し、正常なAssessmentとSearch Traceを受ける。technical_failureまたはcanceledは推奨に変換せず停止する。
+  - Assessment MapはClaim ID、Assessment reference、Trace referenceを一対一で保持する。最終出力のAssessment basisはこのMapを参照する。
+  - 記事再調査は最大二回で、Claim本文・scope・target version・temporal contextの全一致だけ既存Assessmentを再利用する。
+
+contract_artifacts:
+  - kind: feature_design
+    source: docs/features/FEAT-003/design.md
+  - kind: article_analysis_contract
+    source: docs/features/FEAT-003/design/article-analysis-template.md
+  - kind: reading_value_contract
+    source: docs/features/FEAT-003/design/reading-value-template.md
+  - kind: execution_boundary_decision
+    source: docs/features/FEAT-003/decisions/DEC-FEAT-010.md
+  - kind: recheck_decision
+    source: docs/features/FEAT-003/decisions/DEC-FEAT-011.md
+  - kind: public_article_retrieval_decision
+    source: docs/features/FEAT-003/decisions/DEC-FEAT-012.md
+  - kind: knowledge_assessment_dependency
+    source: skills/knowledge-search/SKILL.md
+  - kind: independent_design_review
+    source: docs/features/FEAT-003/design-review.md
+  - kind: human_design_review
+    source: .ai/workflow/state.yaml#features.FEAT-003.human_design_review
+
+out_of_scope:
+  - Knowledge CLIのcmd/、internal/、SQLite schema・migration、公開CLI JSON、公開設定の追加・変更。
+  - skills/knowledge-search/の探索戦略、状態分類、Budget、記事取得、推奨機能の変更。
+  - Article本文の永続アーカイブ、認証済みサイト・状態変更を伴う取得、一般的な記事品質ランキング。
+  - ConversationまたはTask EpisodeからのEvidence候補抽出・知識更新（FEAT-004）。
+  - Scenario A〜Jをまたぐ横断Fixture評価基盤（FEAT-005）。
+
+implementation_notes:
+  - 親リポジトリでskills/reading-value/を新設し、TASK-003-01からTASK-003-03の順に記事取得・分析、評価統合・推奨、検証を積み上げる。
+  - 既存skills/knowledge-search/は依存先であり、FEAT-003はそこで返るAssessment／Trace契約を消費する。
+  - 上記の固定済み配置以外の実装組織化、symbol、フレームワーク、ライブラリはImplementation領域で既存基盤に従って決める。ただし会話I/O、IP固定、Claim照合、再調査上限、失敗伝播、公開契約非変更は変更しない。

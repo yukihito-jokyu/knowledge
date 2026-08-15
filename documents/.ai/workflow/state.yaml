@@ -23,10 +23,17 @@ features:
     human_design_review: approved # 利用者の「はい」（2026-08-15）によるCodex側workflow実行形態の更新済み詳細設計承認
     task_breakdown: completed
     implementation_handoff: ready
+  FEAT-003:
+    design: completed
+    design_review: completed
+    human_design_review: approved # 利用者の「ではタスク分割に進んでください」（2026-08-15）による詳細設計の明示承認
+    task_breakdown: completed
+    implementation_handoff: ready
 
-current_feature: FEAT-002
+current_feature: FEAT-003
 pending_decisions: []
 open_change_requests: []
 implementation_ready_features:
   - FEAT-001
   - FEAT-002
+  - FEAT-003

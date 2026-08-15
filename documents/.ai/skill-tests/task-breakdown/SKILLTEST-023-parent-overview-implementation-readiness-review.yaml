@@ -1,0 +1,18 @@
+id: SKILLTEST-023
+target_skill: task-breakdown
+related_issue: human-feedback-2026-08-15-post-task-implementation-readiness-review
+scenario: Task分割後に親リポジトリ俯瞰の実装者レビューを必須にする
+input_summary: |
+  Featureの詳細設計は独立レビューpassと利用者承認を満たしており、Taskとhandoffのdraftを作成した。
+  実装対象はdocuments配下ではなく親リポジトリのskills/に新設し、既存Skillへ依存する。
+expected:
+  - Task作成者とは異なるfreshなsubagentへ、親リポジトリrootから実装先、依存先、AGENTS.md、既存基盤、検証手順を俯瞰する読み取りレビューを委譲する。
+  - reviewerは実装者の立場で配置・成果物・依存I/O・Task順序・受入oracle・公開契約および安全境界を反証的に確認する。
+  - blockerがなければ、親リポジトリ俯瞰の範囲、判定、根拠をtasks.mdとhandoffのimplementation_readiness_reviewへ記録してからreadyにする。
+  - blockerがあればreadyにせず、根拠付きで該当Ownerへ差し戻す。
+forbidden:
+  - documents配下の設計資料だけを読んで実装可能と判定する。
+  - 設計レビューpassまたは利用者承認を、Task分割後の実装可能性レビューの代替として扱う。
+  - reviewerにTaskやhandoffを直接編集させる。
+notes: |
+  このレビューは実装設計を追加する工程ではない。承認済み契約と実装基盤・配置・依存の接続可能性を確認する。

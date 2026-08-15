@@ -165,6 +165,8 @@ Featureが境界を跨ぐ場合に必要な契約を定義する。
 
 ただし、Initial Designで技術が固定されていない限り、framework固有の型やfile pathへ落とさない。
 
+実装配置がInitial Designまたは適用中の`AGENTS.md`で固定済みである場合、または利用者が実装成果物と配置先の明記を明示的に求めた場合は、`design.md`に「Implementation Deliverables / Placement」を設ける。作成する実行成果物、そのroot-relative配置先、責務、既存成果物との依存だけを記載する。function/class/symbol、framework API、コード構造は決めない。
+
 ### 5a. Contract Completeness Gate
 
 Featureが次の性質を持つ場合、該当する論理契約を `design.md` で具体化する。実装者またはTaskに仕様の決定を委ねてはならない。
@@ -247,7 +249,7 @@ Task BreakdownがAcceptance Criteriaを再解釈しなくてよいレベルま�
 ## Guardrails
 
 - 1 Featureを超えて詳細設計しない
-- `internal/...` のようなfile pathを原則決めない
+- `internal/...` のようなfile pathを、固定済みの配置規約または利用者の明示要求なしに決めない
 - function/class/package単位へTask化しない
 - Initial Designを直接書き換えない
 - 既存コードが偶然そうなっているだけの実装詳細をRequirementへ昇格しない
