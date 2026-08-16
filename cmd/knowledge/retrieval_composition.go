@@ -63,5 +63,5 @@ func defaultStorePath() (string, error) {
 		return "", fmt.Errorf("resolve user configuration directory: %w", err)
 	}
 
-	return filepath.Join(directory, "knowledge", "knowledge.db"), nil
+	return filepath.Join(directory, "knowledge-cli", "knowledge.db"), nil
 }
