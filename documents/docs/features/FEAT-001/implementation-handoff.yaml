@@ -183,7 +183,7 @@ interfaces_and_contracts:
   - Lexical search is the initial search capability; semantic search is not a v1 operation.
   - search-contradictions returns selector-matched seed, opposite Assertion target, and stored direction; contradicts endpoints are Assertion-to-Assertion only.
   - search-temporal optionally accepts either an RFC 3339 UTC point or an RFC 3339 UTC closed query interval. Inputs and stored temporal values are normalized to fixed-width UTC with nine fractional digits before SQLite TEXT comparison; schema v2 atomically normalizes existing temporal_metadata values before a read. It matches the stored valid interval by inclusive containment or inclusive overlap; a one-sided null is open and a two-sided null does not match a temporal query.
-  - The normal binary resolves one OS-standard user configuration directory Store at `knowledge/knowledge.db`; callers cannot select another Store through a public option, environment variable, or configuration file.
+  - The normal binary resolves one OS-standard user configuration directory Store at `knowledge-cli/knowledge.db`; callers cannot select another Store through a public option, environment variable, or configuration file.
   - A first Ctrl-C observed before response writing cancels the one request context across all layers and exits 130 with no JSON and empty stdout/stderr; output already started is not retracted.
 
 contract_artifacts:
