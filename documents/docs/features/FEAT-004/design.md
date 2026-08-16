@@ -28,7 +28,7 @@ FEAT-001の既存CLI/SQLite/JSON契約をそのまま消費し、公開operation
 2. Article Analysis、Knowledge Search、Reading ValueがURL評価を行い、Reading Value Assessmentの内容を完成させる。この時点をEpisode完了時刻として固定するが、回答本文はまだ会話へ返さない。Evidenceの`observed_at`には各ユーザー寄与の観測時刻を使う。
 3. Knowledge Acquisitionは、当該`episode_id`に属するユーザー由来の技術的説明、推論、コード、訂正、自己申告、技術判断だけを読み、独立評価可能なCandidate Knowledgeへ分ける。
 4. 各候補に対し、CLIへそのまま渡せる完全なEvidence原文、表示用の必要最小限の抜粋、Evidence kind、強度、観測時刻、発話内候補順、正規化候補、Scope/時点の明示情報、抽出理由を残す。強度は説明・推論・コード・訂正、および理由を伴う技術判断を`strong`、自己申告を`moderate`、概念認識だけを`weak`とする。理由を伴わない技術判断は候補にしない。複合的な寄与は根拠種類ごとに候補を分ける。質問だけ、AIだけの説明、記事本文・閲覧・評価・要約だけは候補を作らない。
-5. Knowledge Updateは、各Candidateの`search_queries`を先頭から順に一回ずつ`search-text --query`へ渡す。先頭queryは候補Assertionそのもので、以後は原文に明示されたConcept・Alias・Identifierだけである。空結果でも次queryへ進み、返ったAssertion IDを初出順に重複除去して、その集合だけを必要時に`get`と`get-evidence`で確認する。検索失敗・中断では残りqueryと後続Candidateを実行しない。意味的同一性、Evidenceの強度、訂正・置換の意味はCodexが判断する。字句検索で到達できない別表現の既存Assertionは発見できないため、未発見の意味的重複を防止することは保証しない。
+5. Knowledge Updateは、各Candidateの`search_queries`を先頭から順に一回ずつ`search-text --query`へ渡す。先頭queryは候補Assertionそのもので、訂正Evidenceに引用符で囲まれた旧命題がある場合だけ完全な引用文を二番目に置け、以後は原文に明示されたConcept・Alias・Identifierだけである。空結果でも次queryへ進み、返ったAssertion IDを初出順に重複除去して、その集合だけを必要時に`get`と`get-evidence`で確認する。検索失敗・中断では残りqueryと後続Candidateを実行しない。意味的同一性、Evidenceの強度、訂正・置換の意味はCodexが判断する。字句検索で到達できない別表現の既存Assertionは発見できないため、未発見の意味的重複を防止することは保証しない。
 6. 候補を発話順・発話内候補順に処理する。候補ごとに`create`、`attach-evidence`、`revise`、`supersede`、`skip`を一つ選ぶ。成功・skip後は次候補へ進む。失敗・中断・部分適用・結果不明では後続Candidateを処理せず`not_started`としてUpdate Resultへ残す。
 7. 全候補が処理済み、または技術失敗・中断がUpdate Resultへ記録された時点で、完成済みのURL評価への回答本文を変更せず会話へ返す。
 
@@ -272,7 +272,7 @@ CLI利用はFEAT-001の[Command Catalog](../FEAT-001/design/command-catalog.md)�
 5. `attach-evidence`の完全一致conflictは既適用確認後だけ成功扱いにし、不一致conflictは失敗として止める。
 6. `revise`後のEvidence追加、または`supersede`の後段が未適用と分かる失敗・中断では、先行して成功したrevisionまたは新Assertionを削除せず、`partially_applied`、成功ID、失敗operationを結果へ残す。`supersede`の`conflict`は保存済みと断定できないため、この扱いの例外として`failure_reason: outcome_unknown`の`failed`にする。
 7. CLI validation、not-found、storage、internal、JSON不整合、exit 130ごとに、知識状態や更新成功を捏造せず、後続候補を自動実行しない。
-8. Fixtureは少なくとも、空候補（Decision一覧が空、全体状態`completed`）、説明・推論・コード・訂正・理由を伴う技術判断の`strong`、自己申告の`moderate`、概念認識の`weak`、理由を伴わない技術判断の除外、複合寄与の候補分割、質問のみ、AI説明のみ、候補Assertion→原文明示のConcept・Alias・Identifierを順に検索する操作列、検索IDの初出順重複除去、検索失敗時の残りquery・Candidate停止、重複Evidence、複数Candidateの順次成功・skip、途中失敗後の残るCandidateの`not_started`、`revise`成功後のEvidence追加失敗・exit 130の`partially_applied`、置換後段の未適用失敗・中断、および`supersede conflict`の`failed/outcome_unknown`を再現する。候補は発話順・発話内候補順で処理されることを確認する。Scenario A〜Jとの受入評価の統合所有はFEAT-005に置く。
+8. Fixtureは少なくとも、空候補（Decision一覧が空、全体状態`completed`）、説明・推論・コード・訂正・理由を伴う技術判断の`strong`、自己申告の`moderate`、概念認識の`weak`、理由を伴わない技術判断の除外、複合寄与の候補分割、質問のみ、AI説明のみ、候補Assertion→訂正時の引用旧命題→原文明示のConcept・Alias・Identifierを順に検索する操作列、検索IDの初出順重複除去、検索失敗時の残りquery・Candidate停止、重複Evidence、複数Candidateの順次成功・skip、途中失敗後の残るCandidateの`not_started`、`revise`成功後のEvidence追加失敗・exit 130の`partially_applied`、置換後段の未適用失敗・中断、および`supersede conflict`の`failed/outcome_unknown`を再現する。候補は発話順・発話内候補順で処理されることを確認する。Scenario A〜Jとの受入評価の統合所有はFEAT-005に置く。
 
 ## Assumptions
 

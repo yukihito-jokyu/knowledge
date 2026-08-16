@@ -119,12 +119,16 @@ func retrievalResponse(data any) any {
 	case domain.EvidenceResult:
 		evidence := make([]map[string]any, 0, len(value.Evidence))
 		for _, entry := range value.Evidence {
-			evidence = append(evidence, map[string]any{
+			item := map[string]any{
 				"evidence_id": entry.ID,
 				"kind":        entry.Kind,
 				"raw_text":    entry.RawText,
 				"observed_at": entry.ObservedAt,
-			})
+			}
+			if entry.Temporal != nil {
+				item["temporal"] = temporalResponse(entry.Temporal)
+			}
+			evidence = append(evidence, item)
 		}
 
 		return map[string]any{

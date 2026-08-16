@@ -75,6 +75,8 @@ description: 承認済みのKnowledge CLI仕様をGoで実装する唯一のwrit
 
 編集loopでは変更packageのtestと該当integration testを使う。最終candidateでは`gofmt`後に、`go test ./...`、`go vet ./...`、`task lint`、package別coverage script、変更に対応するCLI process integration testをすべて実行する。
 
+`codex exec`、またはそれを内部で起動する人間専用Runtime受入taskは、AIが実行してはならない。Runtime受入が必要な場合は、通常の自動gateと別taskへ分離し、目的、前提となる認証、実行コマンド、期待される観測を利用者へ示す。実行結果は利用者が提示した場合だけ受け取り、AIの自動検証結果として扱わない。
+
 互いにrepository artifactを書かないcommandは並列実行してよい。全必須gate成功時だけ`READY_FOR_REVIEW`を返す。失敗時は`BLOCKED`とし、command、exit status、主要error、未実行gateを記録する。正規sourceのfingerprintが変わった場合は`NEEDS_SPEC_RECHECK`とする。
 
 ## Final Candidate Checklist

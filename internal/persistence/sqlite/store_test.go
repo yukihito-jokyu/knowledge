@@ -195,7 +195,7 @@ func TestRegisteredMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("registeredMigrations() error = %v", err)
 	}
-	if len(migrations) != 2 || migrations[1].version != 2 || migrations[1].apply == nil {
+	if len(migrations) != 3 || migrations[2].version != 3 || migrations[2].apply == nil {
 		t.Fatalf("registered migrations = %#v", migrations)
 	}
 	migrationFileSystem = fstest.MapFS{}
@@ -414,6 +414,27 @@ func TestSchemaStateHandlesCatalogFailures(t *testing.T) {
 					columns: []string{"name"},
 					err:     errors.New("スキーマ走査失敗"),
 				}, nil
+			},
+			wantErr: true,
+		},
+		{
+			name: "旧schemaの移行履歴照会に失敗する",
+			handler: func(query string) (driver.Rows, error) {
+				if strings.Contains(query, "type IN") {
+					values := make([][]driver.Value, 0, len(schemaObjects)-1)
+					for _, name := range schemaObjects {
+						if name != "evidence_temporal_metadata" {
+							values = append(values, []driver.Value{name})
+						}
+					}
+
+					return &coverageRows{
+						columns: []string{"name"},
+						values:  values,
+					}, nil
+				}
+
+				return nil, errors.New("旧schemaの履歴照会失敗")
 			},
 			wantErr: true,
 		},
@@ -1233,7 +1254,7 @@ func TestOpenAppliesSchemaAndRerunsWithoutChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	assertSchemaVersion(t, store.db, 2)
+	assertSchemaVersion(t, store.db, 3)
 	assertSchemaObjects(t, store.db)
 	if err := store.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
@@ -1244,7 +1265,7 @@ func TestOpenAppliesSchemaAndRerunsWithoutChange(t *testing.T) {
 		t.Fatalf("second Open() error = %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	assertSchemaVersion(t, store.db, 2)
+	assertSchemaVersion(t, store.db, 3)
 }
 
 func TestOpenMigratesV1TemporalMetadata(t *testing.T) {
@@ -1266,7 +1287,8 @@ INSERT INTO temporal_metadata (assertion_id, revision, valid_from, valid_until, 
 		t.Fatalf("v2へ移行して開く: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	assertSchemaVersion(t, store.db, 2)
+	assertSchemaVersion(t, store.db, 3)
+	assertSchemaObjects(t, store.db)
 	var validFrom, validUntil, observedAt, lastVerified string
 	if err := store.db.QueryRowContext(ctx, "SELECT valid_from, valid_until, observed_at, last_verified FROM temporal_metadata WHERE assertion_id = 'asrt_01'").Scan(&validFrom, &validUntil, &observedAt, &lastVerified); err != nil {
 		t.Fatalf("正規化済み時点情報を読む: %v", err)
@@ -1399,6 +1421,27 @@ func TestOpenRejectsMissingRequiredIndex(t *testing.T) {
 	}
 	if _, err := store.db.ExecContext(ctx, "DROP INDEX idx_relations_target"); err != nil {
 		t.Fatalf("drop required index: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	_, err = Open(ctx, path)
+	if !errors.Is(err, ErrInconsistentSchema) {
+		t.Fatalf("Open() error = %v, want ErrInconsistentSchema", err)
+	}
+}
+
+func TestOpenRejectsMissingRequiredSchemaObject(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "missing-evidence-temporal.db")
+	store, err := Open(ctx, path)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if _, err := store.db.ExecContext(ctx, "DROP TABLE evidence_temporal_metadata"); err != nil {
+		t.Fatalf("drop required table: %v", err)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
@@ -1581,17 +1624,7 @@ func assertSchemaObjects(t *testing.T, db *sql.DB) {
 			t.Fatalf("schema object %q missing: %v", name, err)
 		}
 	}
-	for _, name := range []string{
-		"idx_scopes_key_value",
-		"idx_evidence_assertion",
-		"idx_aliases_concept",
-		"idx_concept_terms_concept",
-		"idx_assertion_concepts_concept",
-		"idx_assertion_aliases_value",
-		"idx_relations_source",
-		"idx_relations_target",
-		"idx_temporal_window",
-	} {
+	for _, name := range schemaIndexes {
 		var found string
 		if err := db.QueryRowContext(context.Background(), "SELECT name FROM sqlite_schema WHERE type = 'index' AND name = ?", name).Scan(&found); err != nil {
 			t.Fatalf("index %q missing: %v", name, err)
@@ -1680,7 +1713,7 @@ func TestRetrievalOperations(t *testing.T) {
 			name: "Evidence取得",
 			verify: func(t *testing.T, store *Store) {
 				result, err := store.GetEvidence(ctx, "asrt_01")
-				if err != nil || len(result.Evidence) != 2 || result.Evidence[0].ID != "evd_01" {
+				if err != nil || len(result.Evidence) != 2 || result.Evidence[0].ID != "evd_01" || result.Evidence[0].Temporal == nil || result.Evidence[0].Temporal.VersionScope == nil || *result.Evidence[0].Temporal.VersionScope != "go1.22+" || result.Evidence[1].Temporal != nil {
 					t.Fatalf("GetEvidence() = %#v, %v", result, err)
 				}
 			},
@@ -1716,6 +1749,20 @@ func TestRetrievalOperations(t *testing.T) {
 	}
 }
 
+func TestSearchTextStopsAtIntegrationGate(t *testing.T) {
+	originalGate := waitForIntegrationGate
+	t.Cleanup(func() { waitForIntegrationGate = originalGate })
+	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "search-text-gate.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	waitForIntegrationGate = func(context.Context, string) error { return context.Canceled }
+	if _, err := store.SearchText(context.Background(), "channel"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("SearchText gate error = %v, want context.Canceled", err)
+	}
+}
+
 func seedRetrievalStore(t *testing.T, store *Store) {
 	t.Helper()
 	statements := []string{
@@ -1739,6 +1786,7 @@ func seedRetrievalStore(t *testing.T, store *Store) {
 		"INSERT INTO assertion_aliases (assertion_id, alias_kind, alias_value) VALUES ('asrt_01', 'identifier', 'channel')",
 		"INSERT INTO evidence (evidence_id, assertion_id, kind, raw_text, observed_at, created_at) VALUES ('evd_02', 'asrt_01', 'user_code', 'second', '2026-08-15T00:00:00Z', '2026-08-15T00:00:00Z')",
 		"INSERT INTO evidence (evidence_id, assertion_id, kind, raw_text, observed_at, created_at) VALUES ('evd_01', 'asrt_01', 'user_code', 'first', '2026-08-14T00:00:00Z', '2026-08-14T00:00:00Z')",
+		"INSERT INTO evidence_temporal_metadata (evidence_id, version_scope) VALUES ('evd_01', 'go1.22+')",
 		"INSERT INTO assertion_lexical_index (assertion_id, normalized_text, concept_name, concept_alias, scope_key, scope_value, assertion_alias) VALUES ('asrt_01', 'channel send', 'channel', 'chan', 'language', 'Go', 'channel')",
 	}
 	for _, statement := range statements {

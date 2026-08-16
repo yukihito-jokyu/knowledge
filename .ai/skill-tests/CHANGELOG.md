@@ -1,5 +1,9 @@
 # Skill Tests Changelog
 
+## 2026-08-16
+
+- `impl-knowledge-cli-implementation`: Codex Runtime受入は人間専用の別taskに分離し、AIが`codex exec`またはそのwrapperを実行しない規約と回帰scenarioを追加。#223
+
 ## 2026-08-14
 
 - `review-knowledge-cli`に、candidate差分から変更production packageを独立抽出し、temporary profileでcoverageを再測定するreview専用Python scriptと回帰scenarioを追加。

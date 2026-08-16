@@ -64,6 +64,7 @@ Assessment本文が未完成、URL評価が失敗・中断、または完了時�
 - proposed_assertion: <独立評価可能な候補Assertion>
 - search_queries:
   - <proposed_assertionそのもの>
+  - <訂正Evidenceで引用された旧命題（ある場合だけ）>
   - <原文に明示されたConcept/Alias/Identifier>
 - scope: <明示されたkey/value list、なければ []>
 - temporal: <明示情報object、なければ null>
@@ -92,7 +93,7 @@ Assessment本文が未完成、URL評価が失敗・中断、または完了時�
 | `strength` | 必須、enum | `strong`、`moderate`、`weak`。Evidenceから導出する表示値で、Knowledge Storeの保存fieldではない。 |
 | `observed_at` | 必須、RFC 3339 UTC string | 参照寄与の`observed_at`と同じ値。 |
 | `proposed_assertion` | 必須、string | ユーザー知識として独立評価できる候補。Evidenceの意味を越えて一般化しない。 |
-| `search_queries` | 必須、1件以上のstring list | 先頭は`proposed_assertion`そのもの。後続は原文に明示されたConcept・Alias・Identifierだけ。 |
+| `search_queries` | 必須、1件以上のstring list | 先頭は`proposed_assertion`そのもの。訂正Evidenceに引用された旧命題がある場合だけ二番目にその完全な引用文を置ける。残りは原文に明示されたConcept・Alias・Identifierだけ。 |
 | `scope` | 必須、key/value list（空可） | 発話で明示された適用範囲だけ。空でないkey/value、同一key重複なし、推測補完なし。 |
 | `temporal` | 必須、objectまたはnull | 明示された`valid_from`、`valid_until`、`version_scope`、`observed_at`、`last_verified`だけ。情報がなければnull。 |
 | `extraction_rationale` | 必須、string | なぜ許可されたユーザー由来Evidenceとして候補化したか。AIや記事の説明を理由にしない。 |
@@ -121,9 +122,10 @@ Candidateは一つの`evidence_kind`だけを持つ。複合寄与は同じ`sour
 ## search_queries規則
 
 1. 先頭要素は`proposed_assertion`と完全一致させる。
-2. Evidence原文を左から右へ走査し、ユーザーがConcept、Alias、Identifierとして明示した文字列だけを後続要素へ置く。コード識別子、明示されたAPI・パッケージ・コマンド名、引用・ラベル付きの用語は対象になり得る。
-3. 文字列は原文の綴り、大小文字、記号、空白を保つ。完全一致する文字列が再出現した場合は最初の一件だけ残す。
-4. 推測した同義語、翻訳語、関連語、Scopeの値、一般化した表現を追加しない。Concept・Alias・Identifierか判断できない語は追加しない。
+2. 訂正Evidenceに引用符で囲まれた旧命題がある場合だけ、その完全な引用文を二番目の要素へ置く。引用がない、または引用文が先頭要素と完全一致する場合は置かない。
+3. Evidence原文を左から右へ走査し、ユーザーがConcept、Alias、Identifierとして明示した文字列だけを残りの後続要素へ置く。コード識別子、明示されたAPI・パッケージ・コマンド名、引用・ラベル付きの用語は対象になり得る。
+4. 文字列は原文の綴り、大小文字、記号、空白を保つ。完全一致する文字列が再出現した場合は最初の一件だけ残す。
+5. 推測した同義語、翻訳語、関連語、Scopeの値、一般化した表現を追加しない。Concept・Alias・Identifierか判断できない語は追加しない。
 
 ## Handoff境界
 

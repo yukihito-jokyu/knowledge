@@ -36,7 +36,7 @@
 | `strength` | enum、必須 | `strong`、`moderate`、`weak`。保存fieldではなく、`evidence_kind`と`evidence_raw_text`を根拠にCodexがこの候補時点で再評価した派生表示。 |
 | `observed_at` | RFC 3339 UTC string、必須 | 参照する`user_contributions.observed_at`と同じ値。 |
 | `proposed_assertion` | string、必須 | ユーザー知識として独立評価可能な正規化候補。 |
-| `search_queries` | 1件以上のstring list、必須 | 既存`search-text --query`へ順番に渡す検索入力。先頭は`proposed_assertion`そのもの、以後は原文で明示されたConcept・Alias・Identifierだけを出現順に置く。同じ文字列は最初の一件だけにし、Scopeや推測した同義語は加えない。 |
+| `search_queries` | 1件以上のstring list、必須 | 既存`search-text --query`へ順番に渡す検索入力。先頭は`proposed_assertion`そのもの。訂正Evidenceに引用符で囲まれた旧命題がある場合だけ、その完全な引用文を二番目に置ける。残りは原文で明示されたConcept・Alias・Identifierだけを出現順に置く。同じ文字列は最初の一件だけにし、Scopeや推測した同義語は加えない。 |
 | `scope` | key/value list、必須。空可 | 各要素は空でない`key`と`value`を各1つ持つ。発言で明示された適用範囲だけであり、同じkeyを重複させず、推測で補わない。 |
 | `temporal` | objectまたはnull、必須 | 発言で明示された`valid_from`、`valid_until`、`version_scope`、`observed_at`、`last_verified`だけを持つ。時刻はRFC 3339 UTC、未指定fieldは`null`、情報がなければobject全体が`null`。 |
 | `extraction_rationale` | string、必須 | 候補化したユーザー由来の理由。 |

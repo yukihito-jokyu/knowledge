@@ -33,7 +33,7 @@
 | 回答の返却順 | Acquisition→Updateを同一Workflowで同期実行し、結果によらず完成済み本文を返す | DEC-FEAT-015 | explicit | 整合 |
 | 候補化・除外 | ユーザー由来の説明・推論・コード・訂正・自己申告・技術判断を対象にし、AI説明・記事・閲覧・評価・要約・質問のみを除外する | REQ-015、REQ-017、BR-005、DEC-FEAT-013 | explicit | 整合。除外入力にはCandidateもDecisionも作らず、候補ゼロは空一覧・`completed`である。 |
 | Evidence強度 | 説明・推論・コード・訂正=`strong`、自己申告=`moderate`、概念認識=`weak`。理由を伴う技術判断は推論として扱う | BR-006、REQ-018 | explicit / derived | 整合。理由を伴わない判断の除外は、根拠のない知識化を避けるFeature内L2規則として明記済み。 |
-| 候補の検索入力・順序 | `proposed_assertion`を先頭に、原文で明示されたConcept・Alias・Identifierだけを発話順・候補順で一回ずつ`search-text --query`へ渡す。IDは初出順で重複除去する | REQ-016、BR-010、FEAT-001 `search-text`契約 | derived | 整合。Candidate契約が検索列・停止・取得対象を一意に定義する。 |
+| 候補の検索入力・順序 | `proposed_assertion`を先頭に、訂正時は原文で引用された完全な旧命題を二番目に、残りのConcept・Alias・Identifierを発話順・候補順で一回ずつ`search-text --query`へ渡す。IDは初出順で重複除去する | REQ-016、BR-010、FEAT-001 `search-text`契約、DEC-FEAT-022 | decided | 整合。Candidate契約が検索列・停止・取得対象を一意に定義する。 |
 | 更新選択・責務 | Codexが意味照合と操作選択を担い、CLIが検索・保存を決定論的に実行する | REQ-016、REQ-019、BR-010、初期設計 | explicit | 整合 |
 | CLI / 永続化境界 | 新operation・公開JSON・schema・migrationを追加せず既存7 operationを消費する | REQ-014、初期設計、FEAT-004対象外 | explicit | 整合 |
 | 訂正・置換・履歴 | 物理削除せず、二操作の後段失敗・中断は部分適用または結果不明として残す | REQ-018、BR-008、NFR-004、DEC-FEAT-014 | explicit | 整合 |

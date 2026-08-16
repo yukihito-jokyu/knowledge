@@ -463,8 +463,8 @@ func TestSharedCLIFixtureSeedsEntitiesAndReappliesEmbeddedMigrations(t *testing.
 	if err := database.QueryRowContext(context.Background(), "SELECT count(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatalf("migration履歴を確認する: %v", err)
 	}
-	if migrationCount != 2 {
-		t.Fatalf("migration履歴数 = %d, want 2", migrationCount)
+	if migrationCount != 3 {
+		t.Fatalf("migration履歴数 = %d, want 3", migrationCount)
 	}
 }
 
@@ -962,6 +962,12 @@ func waitForIntegrationGate(path string, stage string) error {
 		contents, err := os.ReadFile(path)
 		if err == nil {
 			if string(contents) != stage {
+				if len(contents) == 0 {
+					time.Sleep(10 * time.Millisecond)
+
+					continue
+				}
+
 				return fmt.Errorf("integration gate stage = %q, want %q", contents, stage)
 			}
 

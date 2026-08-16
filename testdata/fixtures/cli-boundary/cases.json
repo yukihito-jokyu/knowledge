@@ -50,6 +50,14 @@
       "exit_code": 130,
       "stdout": "",
       "stderr": null
+    },
+    {
+      "name": "search-text中の割込み",
+      "stage": "search-text",
+      "arguments": ["search-text", "--query", "channel"],
+      "exit_code": 130,
+      "stdout": "",
+      "stderr": null
     }
   ],
   "cases": [

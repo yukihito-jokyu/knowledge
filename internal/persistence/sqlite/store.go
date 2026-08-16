@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io/fs"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -53,6 +54,7 @@ var schemaObjects = []string{
 	"assertion_concepts",
 	"assertion_aliases",
 	"temporal_metadata",
+	"evidence_temporal_metadata",
 	"relations",
 	"assertion_lexical_index",
 }
@@ -405,6 +407,7 @@ var schemaIndexes = []string{
 	"idx_relations_source",
 	"idx_relations_target",
 	"idx_temporal_window",
+	"idx_evidence_temporal_window",
 }
 
 var migrationName = regexp.MustCompile(`^([0-9]+)_.+\.sql$`)
@@ -500,6 +503,7 @@ WHERE type IN ('table', 'virtual table')
     ?,
     ?,
     ?,
+    ?,
     ?
   )
 ORDER BY name
@@ -544,6 +548,16 @@ func (s *Store) schemaState(ctx context.Context) (schemaStatus, []int, error) {
 		return schemaEmpty, nil, nil
 	}
 	if len(found) != len(schemaObjects) {
+		if len(found) == len(schemaObjects)-1 && !slices.Contains(found, "evidence_temporal_metadata") {
+			var versionOneCount, versionCount int
+			if err := s.db.QueryRowContext(ctx, "SELECT count(*), count(CASE WHEN version = 1 THEN 1 END) FROM schema_migrations").Scan(&versionCount, &versionOneCount); err != nil {
+				return schemaInconsistent, nil, fmt.Errorf("read schema migration version: %w", err)
+			}
+			if versionCount == 1 && versionOneCount == 1 {
+				return schemaCurrent, []int{1}, nil
+			}
+		}
+
 		return schemaInconsistent, nil, nil
 	}
 	for _, index := range schemaIndexes {
@@ -671,7 +685,7 @@ func registeredMigrations() ([]migration, error) {
 	}
 
 	return append(migrations, migration{
-		version: 2,
+		version: 3,
 		apply:   normalizeTemporalMetadata,
 	}), nil
 }
@@ -811,6 +825,9 @@ ORDER BY s.scope_key ASC
 
 // SearchText は現行Assertionを字句検索する。
 func (s *Store) SearchText(ctx context.Context, query string) ([]domain.AssertionSummary, error) {
+	if err := waitForIntegrationGate(ctx, "search-text"); err != nil {
+		return nil, err
+	}
 	phrase := ftsPhrase(query)
 	rows, err := s.db.QueryContext(ctx, searchTextSQL, phrase, phrase, phrase, phrase, phrase, phrase, phrase)
 	if err != nil {
@@ -1146,10 +1163,12 @@ WHERE assertion_id = ?
 `
 
 const evidenceSQL = `
-SELECT evidence_id, kind, raw_text, observed_at
-FROM evidence
+SELECT e.evidence_id, e.kind, e.raw_text, e.observed_at,
+       t.valid_from, t.valid_until, t.version_scope, t.observed_at, t.last_verified
+FROM evidence AS e
+LEFT JOIN evidence_temporal_metadata AS t ON t.evidence_id = e.evidence_id
 WHERE assertion_id = ?
-ORDER BY observed_at ASC, evidence_id ASC
+ORDER BY e.observed_at ASC, e.evidence_id ASC
 `
 
 // GetEvidence はAssertionに紐付くEvidence履歴を取得する。
@@ -1173,8 +1192,18 @@ func (s *Store) GetEvidence(ctx context.Context, assertionID string) (domain.Evi
 	}
 	for rows.Next() {
 		var evidence domain.Evidence
-		if err := rows.Scan(&evidence.ID, &evidence.Kind, &evidence.RawText, &evidence.ObservedAt); err != nil {
+		var validFrom, validUntil, versionScope, observedAt, lastVerified sql.NullString
+		if err := rows.Scan(&evidence.ID, &evidence.Kind, &evidence.RawText, &evidence.ObservedAt, &validFrom, &validUntil, &versionScope, &observedAt, &lastVerified); err != nil {
 			return domain.EvidenceResult{}, fmt.Errorf("read evidence: %w", err)
+		}
+		if validFrom.Valid || validUntil.Valid || versionScope.Valid || observedAt.Valid || lastVerified.Valid {
+			evidence.Temporal = &domain.Temporal{
+				ValidFrom:    nullableString(validFrom),
+				ValidUntil:   nullableString(validUntil),
+				VersionScope: nullableString(versionScope),
+				ObservedAt:   nullableString(observedAt),
+				LastVerified: nullableString(lastVerified),
+			}
 		}
 		result.Evidence = append(result.Evidence, evidence)
 	}

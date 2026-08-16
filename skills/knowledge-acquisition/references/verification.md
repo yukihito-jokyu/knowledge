@@ -124,7 +124,7 @@
 期待結果:
 
 - `search_queries[0]`が`proposed_assertion`と完全一致する。
-- 後続queryは原文に明示されたConcept・Alias・Identifierだけで、出現順が保持される。
+- 訂正Evidenceに引用された旧命題がある場合だけ、`search_queries[1]`はその完全な引用文である。残りの後続queryは原文に明示されたConcept・Alias・Identifierだけで、出現順が保持される。
 - 同じ文字列は大小文字・記号・空白を含めて完全一致で一度だけ現れる。
 - 推測した同義語、翻訳語、Scope由来語、原文にない関連語はない。
 
@@ -155,8 +155,9 @@
 
 期待結果:
 
-- 変更は次の3ファイルだけである: `skills/knowledge-acquisition/SKILL.md`、`skills/knowledge-acquisition/references/artifact-contract.md`、`skills/knowledge-acquisition/references/verification.md`。
-- `cmd/knowledge/`、`internal/`、SQLite、migration、公開CLI/JSON、`skills/knowledge-update/`、`skills/reading-value/`に変更がない。
+- 通常のTASK-004-01実装で変更できるのは、`skills/knowledge-acquisition/SKILL.md`、`skills/knowledge-acquisition/references/artifact-contract.md`、`skills/knowledge-acquisition/references/verification.md`の3ファイルだけである。
+- DEC-FEAT-022の承認済み横断契約同期に限り、`skills/knowledge-update/references/artifact-contract.md`および根拠となるDecision・設計・handoffを同時に更新できる。
+- `cmd/knowledge/`、`internal/`、SQLite、migration、公開CLI/JSON、`skills/knowledge-update/SKILL.md`、`skills/reading-value/`に変更がない。
 - Candidate成果物は一時的で、Store・DB・ledger・設定へ保存されない。
 
 ## 合格判定

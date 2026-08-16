@@ -30,7 +30,7 @@ description: 完成したURL評価Episodeから、ユーザー由来の技術的
 4. 一つの寄与に複数の独立命題、または複数のEvidence種類がある場合は、命題・種類ごとにCandidateを分ける。同じ寄与の候補は先頭から`candidate_ordinal`を1ずつ付ける。
 5. 各Candidateに、意味を変えない完全な`evidence_raw_text`、必要最小限の`source_excerpt`、原文から明示された`scope`と`temporal`、抽出理由、`proposed_assertion`を設定する。原文の要約、黙った正規化、記事本文やAI本文の複製をしない。
 6. `evidence_kind`と`strength`を[成果物契約](references/artifact-contract.md)の表で分類する。理由のない技術判断、質問、概念以外の単なる言及はCandidateにしない。
-7. `search_queries`は`proposed_assertion`をそのまま先頭に置き、続けてEvidence原文に明示されたConcept・Alias・Identifier文字列だけを出現順に置く。同一文字列は最初の一件だけにし、推測した同義語、翻訳語、Scope由来語を加えない。
+7. `search_queries`は`proposed_assertion`をそのまま先頭に置き、訂正Evidenceに引用符で囲まれた旧命題がある場合は、その完全な引用文を二番目に置ける。続けてEvidence原文に明示されたConcept・Alias・Identifier文字列だけを出現順に置く。同一文字列は最初の一件だけにし、推測した同義語、翻訳語、Scope由来語を加えない。
 8. Candidateを`source_ordinal`昇順、同じ寄与内では`candidate_ordinal`昇順に並べ、成果物契約どおりの一時Markdown成果物として呼出側へ返す。`candidate_id`は追跡用の不透明IDであり、処理順や意味を表さない。
 
 ## 除外と停止
@@ -63,6 +63,6 @@ description: 完成したURL評価Episodeから、ユーザー由来の技術的
 - 必須field、寄与の順序、候補の順序、完全なEvidence原文、観測時刻を追跡できる。
 - `user_explanation`、`user_reasoning`、`user_code`、`correction`、`self_report`、`concept_recognition`の分類と`strong` / `moderate` / `weak`が契約どおりである。
 - 複合寄与を独立Candidateへ分け、質問・AI・記事・理由なし判断を候補化していない。
-- `search_queries`の先頭、明示語の出現順、完全一致の重複除去、推測語の不在を確認した。
+- `search_queries`の先頭、訂正時の引用された旧命題、明示語の出現順、完全一致の重複除去、推測語の不在を確認した。
 - 候補ゼロが有効な空結果であり、Update Decision、CLI、DB、migration、保存がないことを確認した。
 - 詳細な観測手順と期待結果は[検証契約](references/verification.md)に従った。

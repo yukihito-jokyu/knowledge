@@ -53,7 +53,7 @@
   - Candidateは`episode_id`、順序、完全なEvidence原文、`observed_at`、Evidence kind、派生strength、正規化Assertion、Scope/Temporal、抽出理由、検索入力を保持する。
   - 説明・推論・コード・訂正・理由を伴う技術判断はstrong、自己申告はmoderate、概念認識はweakとして導出し、複合寄与は根拠種類ごとに分割する。
   - 除外入力にはCandidateもUpdate Decisionも作らず、許可される根拠がゼロなら後続へ空Candidate一覧を渡せる。
-  - 各Candidateの検索入力は候補Assertionを先頭に、原文に明示されたConcept・Alias・Identifierだけを出現順・重複なしで続け、Scopeや推測した同義語を加えない。
+  - 各Candidateの検索入力は候補Assertionを先頭に、訂正Evidenceで引用された完全な旧命題（ある場合のみ）、原文に明示されたConcept・Alias・Identifierを出現順・重複なしで続け、Scopeや推測した同義語を加えない。
 - **依存:** なし。
 - **対象外／注記:** Knowledge Storeの照合・更新と、回答返却の組込みは後続Taskで扱う。Knowledge CLIの変更はしない。
 

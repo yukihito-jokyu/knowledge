@@ -37,10 +37,10 @@ features:
     implementation_handoff: ready
   FEAT-005:
     design: completed
-    design_review: completed # DEC-FEAT-018反映後の独立レビューpass
-    human_design_review: approved # 利用者の「taskごとにissueを登録して下さい」（2026-08-15）による修正版詳細設計の明示承認
-    task_breakdown: pending
-    implementation_handoff: pending
+    design_review: completed # DEC-FEAT-019反映後の独立レビューpass
+    human_design_review: approved # 利用者の「承認します そしてreadyに進めます」（2026-08-15）によるDEC-FEAT-019反映後詳細設計の明示承認
+    task_breakdown: completed
+    implementation_handoff: ready
 
 current_feature: FEAT-005
 pending_decisions: []
@@ -50,3 +50,4 @@ implementation_ready_features:
   - FEAT-002
   - FEAT-003
   - FEAT-004
+  - FEAT-005
