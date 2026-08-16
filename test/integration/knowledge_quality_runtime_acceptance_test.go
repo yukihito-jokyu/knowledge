@@ -26,6 +26,7 @@ type runtimeCaseResult struct {
 	UpdateStatus       string               `json:"update_status"`
 	Operations         json.RawMessage      `json:"cli_operations"`
 	PartialTrace       *runtimePartialTrace `json:"partial_trace"`
+	SearchTrace        *runtimeSearchTrace  `json:"search_trace"`
 	Assessments        json.RawMessage      `json:"assessments"`
 	Markdown           string               `json:"markdown"`
 }
@@ -44,6 +45,15 @@ type runtimePartialTrace struct {
 	Stop      string `json:"stop"`
 	ExitCode  int    `json:"exit_code"`
 	ErrorCode string `json:"error_code"`
+}
+
+type runtimeSearchTrace struct {
+	Operations  []string `json:"operations"`
+	Queries     []string `json:"queries"`
+	ResultIDs   []string `json:"result_ids"`
+	EvidenceIDs []string `json:"evidence_ids"`
+	BudgetUsed  int      `json:"budget_used"`
+	Stop        string   `json:"stop"`
 }
 
 type runtimeClaimAssessment struct {
@@ -109,7 +119,7 @@ func decodeRuntimeCaseResult(t *testing.T, content []byte) runtimeCaseResult {
 	if err := json.Unmarshal(content, &fields); err != nil {
 		t.Fatalf("Runtime Case ResultがJSONではありません: %v: %s", err, content)
 	}
-	for _, key := range []string{"case_id", "execution_mode", "status", "executed_layers", "first_mismatch_layer", "not_executed_layers", "assessment", "confidence", "trace_stop", "assessments", "candidate_ids", "update_status", "cli_operations", "partial_trace", "markdown"} {
+	for _, key := range []string{"case_id", "execution_mode", "status", "executed_layers", "first_mismatch_layer", "not_executed_layers", "assessment", "confidence", "trace_stop", "search_trace", "assessments", "candidate_ids", "update_status", "cli_operations", "partial_trace", "markdown"} {
 		if _, ok := fields[key]; !ok {
 			t.Fatalf("Runtime Case Resultに必須fieldがありません: %s: %s", key, content)
 		}
@@ -136,7 +146,7 @@ func runtimeAcceptancePrompt(t *testing.T, runtimeBinary string, testCase qualit
 
 	return "これはFEAT-005のテスト専用Runtime受入評価です。repositoryを変更せず、与えた隔離Storeだけを使ってください。最初に次の既存Skillを読み、その通常契約に従って評価してください: " + strings.Join(runtimeSkillPaths(testCase), ", ") + "。Reading Value、外部URL、共有Storeは使わないでください。指定したknowledge binaryを実際に呼び、必要なCLI操作とWorkflow判断を観測してください。\n" +
 		"最終回答は次の固定schemaに一致するJSONオブジェクトだけにしてください。Markdownの前後に説明やcode fenceを置いてはいけません。statusは、期待された成功又は期待された技術失敗／中断を実観測して全oracleが一致した場合だけpassです。期待と異なる場合はfailed、実行不能ならnot_runです。期待されたXのCLI失敗そのものをstatus=failedにしてはいけません。\n" +
-		"{\"case_id\":string,\"execution_mode\":\"runtime_acceptance\",\"status\":\"pass\"|\"failed\"|\"not_run\",\"executed_layers\":[string],\"first_mismatch_layer\":\"none\"|string,\"not_executed_layers\":[string],\"assessment\":null|{\"status\":string,\"confidence\":string},\"confidence\":string,\"trace_stop\":string,\"assessments\":null|[{\"assertion_id\":string,\"status\":string}],\"candidate_ids\":[string],\"update_status\":string,\"cli_operations\":[{\"operation\":string}],\"partial_trace\":null|{\"operation\":string,\"stop\":string,\"exit_code\":number,\"error_code\":string},\"markdown\":string}\n" +
+		"{\"case_id\":string,\"execution_mode\":\"runtime_acceptance\",\"status\":\"pass\"|\"failed\"|\"not_run\",\"executed_layers\":[string],\"first_mismatch_layer\":\"none\"|string,\"not_executed_layers\":[string],\"assessment\":null|{\"status\":string,\"confidence\":string},\"confidence\":string,\"trace_stop\":string,\"search_trace\":null|{\"operations\":[string],\"queries\":[string],\"result_ids\":[string],\"evidence_ids\":[string],\"budget_used\":number,\"stop\":string},\"assessments\":null|[{\"assertion_id\":string,\"status\":string}],\"candidate_ids\":[string],\"update_status\":string,\"cli_operations\":[{\"operation\":string}],\"partial_trace\":null|{\"operation\":string,\"stop\":string,\"exit_code\":number,\"error_code\":string},\"markdown\":string}\n" +
 		"executed_layersは次の固定配列を同じ順序で報告してください: " + string(layers) + "。not_executed_layersはexpected oracleの配列を同じ順序で報告してください。両配列は排他的です。検索結果が空ならそのIDを推測してget/get-evidenceや更新を実行せず、最初の不一致層をfailedとして報告してください。assessmentがnullならconfidenceとtrace_stopは空文字列にしてください。assessmentがある場合はassessment.confidenceとconfidenceを同じ値にしてください。assessmentsはclaim_idやselection_statusを使わず、必ずassertion_idとstatusだけを持つ配列にしてください。\n" +
 		"cli_operationsはKnowledge Update対象のcaseだけに記録します。Searchだけのcaseは実際にsearch-textを使っても[]にしてください。Candidate対象外のcaseのcandidate_idsは[]にしてください。partial_traceはX以外ではnullです。Xでは期待されたCLI exit_code（expected oracleのcli.exit_code）を使い、operation、stop、error_codeを含むobjectにしてください。markdownは空文字列にせず、観測結果を要約するMarkdown見出しと本文を必ず入れてください。\n" +
 		"Hではattach-evidenceの公開結果が自動採番のevidence_idでも、対象Assertion・kind・text・observed_atがexpected oracleと一致すれば、Fixtureの論理ID ev-h-correctionに対応した成功として報告してください。訂正Candidateの引用された旧命題を二つ目のsearch-text queryとして使えるのは、通常Skillのsearch_queries契約に従って検索結果からIDを得た場合だけです。Hのcandidate_idsとcli_operationsは期待oracleの固定値・固定順序をそのまま報告し、余分なCLI操作を含めてはいけません。\n" +
@@ -246,6 +256,9 @@ func assertRuntimeCaseResult(t *testing.T, testCase qualityCase, got runtimeCase
 	if testCase.Expected.PartialTrace.Stop == "" && got.PartialTrace != nil {
 		t.Fatalf("partial Trace対象外caseのRuntime oracle = %#v", got)
 	}
+	if !runtimeSearchTraceMatches(testCase, got.SearchTrace) {
+		t.Fatalf("Search Trace対象外caseのRuntime oracle = %#v", got.SearchTrace)
+	}
 }
 
 func runtimeCaseHasUpdate(testCase qualityCase) bool {
@@ -340,6 +353,45 @@ func TestRuntimeCaseResultContract(t *testing.T) {
 			assertRuntimeCaseResult(t, testCase, decodeRuntimeCaseResult(t, content))
 		})
 	}
+	for _, testCase := range fixture.Cases {
+		if !runtimeSearchTraceForbidden(testCase) {
+			continue
+		}
+		t.Run(testCase.CaseID+"/search-trace-forbidden", func(t *testing.T) {
+			result := passingRuntimeCaseResult(t, testCase)
+			result.SearchTrace = &runtimeSearchTrace{Stop: "unexpected"}
+			content, err := json.Marshal(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := decodeRuntimeCaseResult(t, content)
+			if got.SearchTrace == nil {
+				t.Fatal("否定例のSearch Traceを作成できません")
+			}
+			if runtimeSearchTraceMatches(testCase, got.SearchTrace) {
+				t.Fatalf("Search Trace対象外caseを拒否できません: %s", testCase.CaseID)
+			}
+		})
+	}
+}
+
+func runtimeSearchTraceForbidden(testCase qualityCase) bool {
+	return !hasQualitySearchLayer(testCase) || testCase.Expected.PartialTrace.Stop != ""
+}
+
+func runtimeSearchTraceMatches(testCase qualityCase, trace *runtimeSearchTrace) bool {
+	if runtimeSearchTraceForbidden(testCase) {
+		return trace == nil
+	}
+
+	return trace != nil && reflect.DeepEqual(*trace, runtimeSearchTrace{
+		Operations:  testCase.Expected.Trace.Operations,
+		Queries:     testCase.Expected.Trace.Queries,
+		ResultIDs:   testCase.Expected.Trace.ResultIDs,
+		EvidenceIDs: testCase.Expected.Trace.EvidenceIDs,
+		BudgetUsed:  testCase.Expected.Trace.BudgetUsed,
+		Stop:        testCase.Expected.Trace.Stop,
+	})
 }
 
 func TestRuntimeAcceptancePromptExcludesReadingValue(t *testing.T) {
@@ -423,6 +475,16 @@ func passingRuntimeCaseResult(t *testing.T, testCase qualityCase) runtimeCaseRes
 			Stop:      testCase.Expected.PartialTrace.Stop,
 			ExitCode:  runtimePartialTraceExitCode(testCase),
 			ErrorCode: testCase.Expected.CLI.ErrorCode,
+		}
+	}
+	if hasQualitySearchLayer(testCase) && testCase.Expected.PartialTrace.Stop == "" {
+		result.SearchTrace = &runtimeSearchTrace{
+			Operations:  testCase.Expected.Trace.Operations,
+			Queries:     testCase.Expected.Trace.Queries,
+			ResultIDs:   testCase.Expected.Trace.ResultIDs,
+			EvidenceIDs: testCase.Expected.Trace.EvidenceIDs,
+			BudgetUsed:  testCase.Expected.Trace.BudgetUsed,
+			Stop:        testCase.Expected.Trace.Stop,
 		}
 	}
 
