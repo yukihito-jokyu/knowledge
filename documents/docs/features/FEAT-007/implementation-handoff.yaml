@@ -1,0 +1,152 @@
+feature: FEAT-007
+name: 隔離Knowledge Storeの明示選択
+planning_status: drafting
+
+design_readiness:
+  audited_by: task-breakdown
+  status: complete
+  conclusion: >-
+    pass。利用者承認、独立設計レビュー、global CLI input、Store解決、error/exit、
+    11operation適用、workflow伝播、既存Go実装基盤を確認済みであり、実装者へ
+    仕様決定を委ねる欠落はない。
+  contracts:
+    data:
+      status: not_applicable
+      evidence: docs/features/FEAT-007/design.md#scope--out-of-scope
+    operations:
+      status: complete
+      evidence: docs/features/FEAT-007/design.md#interfaces--data
+    retrieval:
+      status: complete
+      evidence: docs/features/FEAT-007/design.md#operation-documentation
+    migration:
+      status: complete
+      evidence: docs/features/FEAT-007/design.md#store解決契約
+    fixtures:
+      status: complete
+      evidence: docs/features/FEAT-007/design.md#acceptance--test-design
+    implementation_foundation:
+      status: complete
+      evidence: docs/design/architecture.md#go-module-と配置規約
+  format_schemas:
+    relational_ddl:
+      status: not_applicable
+      evidence: docs/features/FEAT-007/design.md#scope--out-of-scope
+    json_operations:
+      status: complete
+      evidence: docs/features/FEAT-007/design.md#interfaces--data
+  diagrams:
+    flowchart:
+      status: complete
+      evidence: docs/features/FEAT-007/design.md#state--interaction
+    sequence:
+      status: complete
+      evidence: docs/features/FEAT-007/design.md#state--interaction
+  operation_documentation:
+    status: complete
+    command_catalog: docs/features/FEAT-001/design/command-catalog.md
+    operation_contracts: docs/features/FEAT-001/design/commands/
+    database_schema_reference: docs/features/FEAT-001/design/database-schema.md
+    database_relationship_map: docs/features/FEAT-001/design/database-schema.md#table-と関係
+    database_access_map: docs/features/FEAT-001/design/database-access-map.md
+    evidence: docs/features/FEAT-007/design.md#operation-documentation
+  independent_design_review:
+    status: complete
+    reviewer: design-review
+    reviewed_by: independent_subagent
+    result: pass
+    evidence: docs/features/FEAT-007/design-review.md
+  human_design_review:
+    status: approved
+    approved_by: human
+    evidence: .ai/workflow/state.yaml#features.FEAT-007.human_design_review
+
+requirements: [REQ-022]
+business_rules: [BR-010]
+nonfunctional_requirements: [NFR-007]
+
+logical_areas:
+  - interface / persistence
+  - documentation / workflow
+  - workflow verification
+  - verification
+
+tasks:
+  - id: TASK-007-01
+    title: 明示Store選択を共通CLI境界へ実現する
+    logical_area: interface / persistence
+    depends_on: []
+  - id: TASK-007-02
+    title: Store選択の公開資料と通常Skill参照を整合する
+    logical_area: documentation / workflow
+    depends_on: [TASK-007-01]
+  - id: TASK-007-03
+    title: 隔離検証workflowを専用ブランチへ追従する
+    logical_area: workflow verification
+    depends_on: [TASK-007-01, TASK-007-02]
+  - id: TASK-007-04
+    title: Store選択の互換性と全operation適用を横断検証する
+    logical_area: verification
+    depends_on: [TASK-007-01, TASK-007-02, TASK-007-03]
+
+acceptance_criteria:
+  - 全11operationは明示された一つの絶対Storeを利用し、指定なし時は既定Storeを維持する。
+  - 不正なStore指定はvalidation_error/exit 2、指定Storeのopen/migration失敗はfallbackなしのstorage_error/exit 1となる。
+  - success JSON、既存operation固有I/O、schema/migration asset、Ctrl-C規約を変更しない。
+  - 通常Skillは既定Storeのままであり、検証用`reading-value`、`knowledge-acquisition`、`knowledge-search`、`knowledge-update`の4 rootは、利用者が開いた`verification/` workspaceの`pwd -P`とmarker確認から同じ隔離Storeを全CLI呼出しへ渡す。
+  - review/audit PASS済みで実装branchへcommitされたclean CLI candidateのcommit/candidate fingerprint/source inventory・fingerprint、同candidateに一致する不変Review/Audit Report全文から隔離worktreeで生成したbinaryと、workflow writerが検証・commitしたclean workflow source/root fingerprintからのSkillコピーだけを専用検証ブランチへ同期する。
+  - 実プロセス、全11operation、Go共通検査、利用者実行のRuntime workflowで契約を確認できる。
+
+constraints:
+  - global --storeはoperation前に一度だけ置く絶対パスである。
+  - 指定Storeの失敗時に別Store、環境変数、設定ファイル、権限昇格を使わない。
+  - verification専用Skillが使用できるworkspace起点は、利用者が開いた固定`verification/`の`pwd -P`だけである。`.agents/skills/reading-value/`と`bin/knowledge`がroot直下にない場合は停止し、任意CWD・親探索・利用者追加入力で補正しない。
+  - verification/の追従変更はchore/verification-environmentブランチに限定し、PASS済みReview/Audit Report全文をverification/evidence/<cli-source-commit>/へ不変保存する。source-manifest.jsonでCLI source commit、candidate_fingerprint.py --jsonの完全出力、source inventoryの順序付きroot一覧とsource_fingerprint.py出力、workflow source commit/root/fingerprint、各Reportのpath/SHA-256/verdict/source commit/candidate ID、binary/Skill pathごとのSHA-256を記録する。report本文・manifest・CLI fingerprintの不一致は停止する。manifest自身のhashと同期commitは記録せず、同期Git commitと履歴で確定する。
+  - 実装Taskは承認済み設計を超える公開契約を追加しない。
+
+decisions:
+  - id: DEC-FEAT-023
+    source: docs/features/FEAT-007/decisions/DEC-FEAT-023.md
+  - id: DEC-FEAT-005
+    source: docs/features/FEAT-001/decisions/DEC-FEAT-005.md
+
+interfaces_and_contracts:
+  - knowledge [--store <absolute-path>] <operation> [operation options]
+  - --store is optional, appears once before operation, and never appears in success JSON.
+  - Invalid store input emits validation_error to stderr and exits 2 before opening a Store.
+  - A selected Store's create/open/migration error emits storage_error to stderr and exits 1 without fallback.
+  - The default Store remains os.UserConfigDir()/knowledge/knowledge.db only when --store is absent.
+  - Verification-only Skills copy the ordered roots reading-value, knowledge-acquisition, knowledge-search, and knowledge-update; they derive verification/knowledge.db from the opened verification workspace's pwd -P plus required markers and pass it as explicit argv for every invocation.
+
+contract_artifacts:
+  - kind: feature_design
+    source: docs/features/FEAT-007/design.md
+  - kind: independent_design_review
+    source: docs/features/FEAT-007/design-review.md
+  - kind: human_design_review
+    source: .ai/workflow/state.yaml#features.FEAT-007.human_design_review
+  - kind: cli_input_contract
+    source: docs/features/FEAT-001/design/cli-input-conventions.md
+  - kind: operation_contracts
+    source: docs/features/FEAT-001/design/commands/
+  - kind: implementation_architecture
+    source: docs/design/architecture.md#go-module-と配置規約
+
+out_of_scope:
+  - 既定Storeの移動、環境変数・設定ファイル、権限昇格、同期・共有・remote Store。
+  - SQLite schema、migration asset、domain I/O、既存11operation固有JSON schemaの変更。
+
+implementation_notes:
+  - 公開CLI、Store、error、migrationの実装はimpl-knowledge-cli Skillを使用する。
+  - root Skillsの変更はimpl-knowledge-workflow Skillを使用する。
+  - verification/の追従は、review/auditがPASSしたclean CLI source commit、candidate fingerprint、source inventory/fingerprintと不変Review/Audit Reportを固定して隔離worktreeでbuildする。Skillコピーはworkflow writerが検証した別のclean workflow source commitと対象root/fingerprintから得る。manifest、report、binary、Skillコピーを同一の専用branch commitに置き、Featureブランチと混在させない。Issue #233はこの同期reportと人間専用Runtime受入の状態が揃うまでfinalizeしない。
+  - Codex Runtime受入はAIが実行しない。利用者が会話記録、各CLI invocationのargv記録、verification/knowledge.dbの事後状態、既定Storeへfallbackしなかった確認を提示した場合だけ評価する。未提示なら未実行である。
+  - 実装後は独立コードレビューとaudit-knowledge-cli-conformanceによる最終整合性監査を完了する。
+
+implementation_readiness_review:
+  status: complete
+  reviewer: independent_subagent
+  reviewed_by: feat007_readiness_review
+  repository_overview: parent_repository_root including CLI implementation, workflow Skills, and chore/verification-environment branch
+  result: pending_ir_007_002_rereview
+  evidence: docs/features/FEAT-007/tasks.md#implementation-readiness-review
