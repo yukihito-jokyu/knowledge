@@ -315,8 +315,14 @@ func assertQualityCorrection(t *testing.T, binary string, store defaultStore, c 
 		arguments []string
 		resultIDs []string
 	}{
-		{arguments: []string{"search-text", "--query", input.Claim.Text}, resultIDs: []string{}},
-		{arguments: []string{"search-text", "--query", "unbuffered channelのsendはreceiverが受信可能になる前にも完了する"}, resultIDs: []string{"as-h"}},
+		{
+			arguments: []string{"search-text", "--query", input.Claim.Text},
+			resultIDs: []string{},
+		},
+		{
+			arguments: []string{"search-text", "--query", "unbuffered channelのsendはreceiverが受信可能になる前にも完了する"},
+			resultIDs: []string{"as-h"},
+		},
 		{arguments: []string{"get", "--assertion-id", "as-h"}},
 		{arguments: []string{"get-evidence", "--assertion-id", "as-h"}},
 	} {
