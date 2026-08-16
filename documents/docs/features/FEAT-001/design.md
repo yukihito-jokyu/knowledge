@@ -92,7 +92,7 @@ error code は `validation_error`、`not_found`、`conflict`、`storage_error`�
 
 ### Store の既定保存先と初期化
 
-通常ビルドの `knowledge` は、`os.UserConfigDir()` 配下の `knowledge/knowledge.db` を唯一の既定Storeとする。OSごとの解決結果は、macOSでは `~/Library/Application Support/knowledge/knowledge.db`、Unixでは `$XDG_CONFIG_HOME/knowledge/knowledge.db` または `~/.config/knowledge/knowledge.db`、Windowsでは `%AppData%\\knowledge\\knowledge.db` となる。
+通常ビルドの `knowledge` は、`os.UserConfigDir()` 配下の `knowledge-cli/knowledge.db` を唯一の既定Storeとする。OSごとの解決結果は、macOSでは `~/Library/Application Support/knowledge-cli/knowledge.db`、Unixでは `$XDG_CONFIG_HOME/knowledge-cli/knowledge.db` または `~/.config/knowledge-cli/knowledge.db`、Windowsでは `%AppData%\\knowledge-cli\\knowledge.db` となる。
 
 - 各操作の実行前に、composition rootが親ディレクトリを作成し、SQLite Storeをopenして未適用migrationを適用する。
 - 初回実行時は空Storeを作成する。初期化後の検索は成功の空配列、存在しないAssertionの取得は `not_found` を返す。
@@ -162,7 +162,7 @@ Store はローカル専用 SQLite、CLI が唯一のアクセス経路である
 - **DEC-FEAT-002 (L3, superseded_in_part):** JSON出力・exit code・Indexを独立公開操作にしない方針は維持し、request JSON標準入力はDEC-FEAT-003で置き換えた。
 - **DEC-FEAT-003 (L3, decided):** 入力は名前付きoptionとし、標準入力request JSONを使わない。
 - **DEC-FEAT-004 (L3, decided):** `search-contradictions` の結果は `seed` と常にその相手である `target` を返し、保存方向は `direction` で保持する。矛盾候補を `get` / `get-evidence` へ安全に受け渡すため、`contradicts` Relation は Assertion 間に限定する。
-- **DEC-FEAT-005 (L3, decided):** 通常ビルドは `os.UserConfigDir()/knowledge/knowledge.db` を既定Storeとして初期化する。保存先の選択、設定、運用責任を追加しない。
+- **DEC-FEAT-005 (L3, decided):** 通常ビルドは `os.UserConfigDir()/knowledge-cli/knowledge.db` を既定Storeとして初期化する。保存先の選択、設定、運用責任を追加しない。
 - **DEC-FEAT-006 (L3, decided):** 最初の`Ctrl-C`は要求Contextをcancelし、success／error JSONおよびstdout／stderrを出さず終了コード130で終了する。
 - **DEC-FEAT-007 (L3, decided):** `search-temporal` は任意のRFC 3339 UTC時点または閉区間で、保存済み有効期間を機械的に照合する。時点は包含、期間は重複で一致し、片側`null`は開放境界、両側`null`は時点条件がある照会では不一致とする。時刻は固定幅UTCへ正規化し、SQLiteのTEXT比較を時系列比較として用いる。
 - **L2:** SQLite schema v1 の table／column／Index 名は、承認済み JSON 契約を満たす内部表現である。

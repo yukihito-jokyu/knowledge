@@ -22,7 +22,7 @@
 - `gofmt`、`go test`、`go vet` はGo標準toolchainに含まれる。任意の第三者lint toolを必須化しない。追加する場合は、対象ルール・導入理由・CI実行環境を別Decisionで固定する。
 - domainとapplicationのunit testは対応する内部packageに置く。公開option、JSON、stdout/stderr、exit code、migrationの再実行・rollbackは `test/integration/` と `testdata/fixtures/` を用いてprocess境界で検証する。
 - SQLiteを使うtestは、OS標準のユーザー設定ディレクトリ環境をテストごとの一時領域へ隔離し、通常のcompositionから独立した一時DBを接続する。固定の保存先・共有DB・ユーザーの既存Storeに依存してはならない。DB指定を公開CLI option、設定、環境変数として追加しない。
-- 通常ビルドのStoreだけはDEC-FEAT-005により `os.UserConfigDir()/knowledge/knowledge.db` に固定する。実プロセス境界の検証では、既定Storeの解決・初回migration・`storage_error`を観測する。
+- 通常ビルドのStoreだけはDEC-FEAT-005により `os.UserConfigDir()/knowledge-cli/knowledge.db` に固定する。実プロセス境界の検証では、既定Storeの解決・初回migration・`storage_error`を観測する。
 - CLI process entryからSQLite adapterまで同一の要求Contextを渡すことをunit testで検証する。実バイナリへの`Ctrl-C`は、`integrationtest` build tagにだけ含める非公開同期gateでmigration・read・mutationの開始を確認してから送る。通常compositionと隔離したOS設定ディレクトリを用いるprocess境界testで、JSONなし・stdout／stderrなし・終了コード130として検証し、mutation中の中断ではDB事後状態が不変であることを確認する。このgateは通常ビルドと公開CLI契約に含めない。
 
 ## 依存管理とmigration

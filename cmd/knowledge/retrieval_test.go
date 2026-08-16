@@ -288,7 +288,7 @@ func TestDefaultStorePathAndOpenFailures(t *testing.T) {
 			test: func(t *testing.T) {
 				userConfigDir = func() (string, error) { return "/tmp/config", nil }
 				path, err := defaultStorePath()
-				if err != nil || path != filepath.Join("/tmp/config", "knowledge", "knowledge.db") {
+				if err != nil || path != filepath.Join("/tmp/config", "knowledge-cli", "knowledge.db") {
 					t.Fatalf("defaultStorePath() = %q, %v", path, err)
 				}
 			},

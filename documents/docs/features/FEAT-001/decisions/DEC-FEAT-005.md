@@ -14,14 +14,15 @@ TASK-001-03 の取得操作は、SQLite Storeへ接続できなければ通常�
 
 ### 1. OSのユーザー設定ディレクトリ配下を既定保存先にする（推奨）
 
-`os.UserConfigDir()` が返すディレクトリ配下の `knowledge/knowledge.db` をStoreとする。
+`os.UserConfigDir()` が返すディレクトリ配下の `knowledge-cli/knowledge.db` をStoreとする。
 
 - 初回実行時に親ディレクトリ、SQLite DB、未適用migrationを作成・適用する。
+- macOS環境では `~/Library/Application Support/Knowledge` がOS標準機能（CoreKnowledge/knowledge-agent）のシステム保護領域（TCC/Data Protection対象）として予約されており、非特権プロセスからのアクセスが `Operation not permitted` により遮断されるため、サブディレクトリ名を `knowledge-cli` とすることで衝突を回避する。
 - `os.UserConfigDir()` の解決、ディレクトリ作成、DB open、migrationの失敗は `storage_error` とする。
 - 空Storeでは検索は成功の空配列、Assertion指定の取得は `not_found` とする。
 - `--store` option、環境変数、設定ファイル、実行時の外部migrationディレクトリは追加しない。
 
-**利点:** OSごとのユーザー単位の標準配置に従い、実行ディレクトリに左右されず、既存の公開CLI入力契約を増やさない。
+**利点:** OSごとのユーザー単位の標準配置に従い、実行ディレクトリに左右されず、既存の公開CLI入力契約を増やさない。macOSでのシステム保護領域との衝突も回避できる。
 
 **欠点:** 利用者が任意のStoreを選ぶ機能は初期提供に含まれず、保存先はOSごとに異なる。
 

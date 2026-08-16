@@ -1092,17 +1092,17 @@ func defaultStoreConfiguration(t *testing.T, root string) defaultStore {
 	case "darwin":
 		return defaultStore{
 			Environment: environmentWith(map[string]string{"HOME": root}),
-			Path:        filepath.Join(root, "Library", "Application Support", "knowledge", "knowledge.db"),
+			Path:        filepath.Join(root, "Library", "Application Support", "knowledge-cli", "knowledge.db"),
 		}
 	case "windows":
 		return defaultStore{
 			Environment: environmentWith(map[string]string{"APPDATA": root}),
-			Path:        filepath.Join(root, "knowledge", "knowledge.db"),
+			Path:        filepath.Join(root, "knowledge-cli", "knowledge.db"),
 		}
 	default:
 		return defaultStore{
 			Environment: environmentWith(map[string]string{"XDG_CONFIG_HOME": root}),
-			Path:        filepath.Join(root, "knowledge", "knowledge.db"),
+			Path:        filepath.Join(root, "knowledge-cli", "knowledge.db"),
 		}
 	}
 }

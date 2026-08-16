@@ -56,7 +56,7 @@ Knowledge CLI は単一の Go module として管理する。`go.mod` の最低G
 | `testdata/fixtures/` | CLI入力、期待JSON、seedデータ等の再現可能なfixture | プロダクトコードから読み込まない。公開契約の検証データとして扱う。 |
 | `test/integration/` | process境界を通るCLI／SQLite integration test | `go test ./...` で実行する。unit testを置き換えない。 |
 
-migration SQL assetは Go 標準の `embed` を用いて実行バイナリへ同梱する。SQLだけで精度を保てないデータ変換は、versionごとにSQLite adapter内のGo migration handlerを登録して実行してよい。handlerもバイナリに含まれる内部実装であり、SQL assetと同じく既適用versionを編集せず、単一transaction・順序・再実行・失敗時rollbackの規則に従う。実行時に外部migrationディレクトリ、保存先option、設定ファイルを要求しない。通常ビルドの既定StoreはDEC-FEAT-005に従い、`os.UserConfigDir()/knowledge/knowledge.db` とする。適用規則（連番、単一transaction、再実行、破損schemaの扱い）はFEAT-001の [database-schema.md](../features/FEAT-001/design/database-schema.md#migration) を唯一の正規仕様とする。
+migration SQL assetは Go 標準の `embed` を用いて実行バイナリへ同梱する。SQLだけで精度を保てないデータ変換は、versionごとにSQLite adapter内のGo migration handlerを登録して実行してよい。handlerもバイナリに含まれる内部実装であり、SQL assetと同じく既適用versionを編集せず、単一transaction・順序・再実行・失敗時rollbackの規則に従う。実行時に外部migrationディレクトリ、保存先option、設定ファイルを要求しない。通常ビルドの既定StoreはDEC-FEAT-005に従い、`os.UserConfigDir()/knowledge-cli/knowledge.db` とする。適用規則（連番、単一transaction、再実行、破損schemaの扱い）はFEAT-001の [database-schema.md](../features/FEAT-001/design/database-schema.md#migration) を唯一の正規仕様とする。
 
 integration testは、OS標準のユーザー設定ディレクトリ環境をテストごとの一時領域へ隔離し、通常のcompositionでSQLite adapterを接続する。公開CLIのoption、設定、環境変数としてDB指定を追加せず、利用者の既存Storeにも接続しない。
 

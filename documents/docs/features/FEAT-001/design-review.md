@@ -12,7 +12,7 @@
 | REQ-009、REQ-012、REQ-014、BR-010、CON-004 | confirmed | Relation と矛盾候補の論理検索、Codex と CLI の責務分離、JSON の機械境界 |
 | DEC-FEAT-002、DEC-FEAT-003 | decided (L3) | 11操作、JSON response、名前付きoption入力 |
 | DEC-FEAT-004 | decided (L3) | `seed` / 相手 `target` / 保存方向 `direction`、`contradicts` を Assertion→Assertion に限定 |
-| DEC-FEAT-005 | decided (L3) | `os.UserConfigDir()/knowledge/knowledge.db`、初回migration、公開Store overrideなし |
+| DEC-FEAT-005 | decided (L3) | `os.UserConfigDir()/knowledge-cli/knowledge.db`、初回migration、公開Store overrideなし |
 | DEC-FEAT-006 | decided (L3) | 最初の`Ctrl-C`で同一要求Contextを全層へ伝播し、JSONなし・stdout／stderr空・exit 130、mutationはcommitしない |
 
 ## 契約根拠トレーサビリティ
@@ -23,7 +23,7 @@
 | 保存方向 | `direction` は `outgoing` / `incoming` | explicit | SQL-01の2分岐、項目表、用語、UC-03で一致する。相手の選択と保存方向を混同しない。 |
 | Concept selector | 所属 Assertion を `seed` 候補へ展開し、両端が該当するRelationは2結果を返す | explicit | `selected_seed` と両方向の `UNION ALL` が、各endpointを別の `seed` として返す。relation IDだけでは統合しない。 |
 | `contradicts` endpoint | Assertion→Assertion のみ | explicit | DEC-FEAT-004、`relations` table のCHECK、`create` の入力項目・validation、search SQLのいずれも一致する。 |
-| 既定Store | OS標準のユーザー設定ディレクトリ配下の1箇所 | explicit | DEC-FEAT-005、詳細設計、architecture、handoffが `os.UserConfigDir()/knowledge/knowledge.db` で一致する。 |
+| 既定Store | OS標準のユーザー設定ディレクトリ配下の1箇所 | explicit | DEC-FEAT-005、詳細設計、architecture、handoffが `os.UserConfigDir()/knowledge-cli/knowledge.db` で一致する。 |
 | process境界検証 | 通常compositionを、一時化したOS設定ディレクトリ環境で実行 | explicit / derived | 公開Store overrideを追加せず、初回migration・空Store・保存先初期化失敗を実バイナリで観測する。 |
 | 要求キャンセル | response先頭byte前に観測した最初の`Ctrl-C`は同一ContextをCLI入口からSQLiteへ渡し、通常errorへ写像せずexit 130で終える | explicit | DEC-FEAT-006、設計本文、architecture、cross-cutting concerns、tasks、handoffは、response開始前の優先順位、非Context API前後の確認、開始後に既出力を取り消さない境界を一致して記載する。 |
 | 割込みのprocess検証 | `integrationtest`限定の非公開gateでmigration／read／mutation開始を確認してからSIGINTを送る | explicit | Decision、acceptance、architecture、cross-cutting concerns、TASK-001-08／09、handoffが、通常composition・既定Store・公開option／環境変数／設定を変更しない同一方式を定める。 |
