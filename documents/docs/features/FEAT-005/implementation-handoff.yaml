@@ -153,8 +153,8 @@ acceptance_criteria:
 
 constraints:
   - Fixtureはテスト専用であり、実ユーザーStore、外部記事、認証情報、既定Store、共有Storeを使用しない。
-  - Caseの入力、seed、oracle、Store差分はdocs/features/FEAT-005/design/scenario-catalog.mdを正とし、実装の都合で変更しない。
-  - 既存CLIとWorkflowを消費・観測するだけで、検索・更新・推奨の業務規則を変更しない。Workflow Skill自体も変更しない。
+  - Caseの入力、seed、oracle、Store差分はdocs/features/FEAT-005/design/scenario-catalog.mdを正とし、実装の都合で変更しない。正規契約間の矛盾を是正する変更はcatalog・Fixture・Case Result契約を同時に更新する。
+  - 既存CLIとWorkflowを消費・観測するだけで、検索・更新・推奨の業務規則を変更しない。DEC-FEAT-022で承認された、訂正Evidenceの引用旧命題をCandidate検索queryに加える既存Workflow契約の明文化だけは、Hの固定oracleと同時に更新する。
   - 実装Taskは承認済みの配置以外のfile path、symbol、framework API、ライブラリ固有の構造を指示しない。
 
 decisions:
@@ -188,6 +188,8 @@ contract_artifacts:
     source: skills/reading-value/references/verification.md
   - kind: acquisition_update_contract
     source: docs/features/FEAT-004/design/workflow-contracts.md
+  - kind: correction_quote_query_decision
+    source: docs/features/FEAT-004/decisions/DEC-FEAT-022.md
   - kind: fixture_oracle_decision
     source: docs/features/FEAT-005/decisions/DEC-FEAT-016.md
   - kind: independent_design_review
