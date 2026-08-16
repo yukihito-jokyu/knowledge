@@ -254,8 +254,9 @@ func assertFixtureOracle(t *testing.T, c qualityCase) {
 	if len(c.Expected.NotExecuted) == 0 {
 		t.Fatal("not_executed_layersがありません")
 	}
+	assertAcquisitionUpdateFixture(t, c)
 	if c.CaseID == "FEAT005-X-SEARCH-TECHNICAL-FAILURE" || c.CaseID == "FEAT005-X-SEARCH-CANCELED" {
-		if c.Expected.PartialTrace.Operation != "search-text" || c.Expected.PartialTrace.Stop == "" || !reflect.DeepEqual(c.Expected.NotExecuted, []string{"knowledge_acquisition", "knowledge_update", "end_to_end"}) {
+		if c.Expected.PartialTrace.Operation != "search-text" || c.Expected.PartialTrace.Stop == "" || len(c.Expected.Operations) != 0 || !reflect.DeepEqual(c.Expected.NotExecuted, []string{"knowledge_acquisition", "knowledge_update", "end_to_end"}) {
 			t.Fatalf("X partial traceが不正: %#v", c.Expected.PartialTrace)
 		}
 
@@ -266,6 +267,20 @@ func assertFixtureOracle(t *testing.T, c qualityCase) {
 	}
 	if hasQualitySearchLayer(c) && c.Expected.PartialTrace.Stop == "" && (len(c.Expected.Trace.Operations) == 0 || len(c.Expected.Trace.Queries) == 0 || c.Expected.Trace.Stop == "" || c.Expected.Trace.BudgetUsed <= 0) {
 		t.Fatalf("Search Trace oracleが不完全: %s: %#v", c.CaseID, c.Expected.Trace)
+	}
+}
+
+func assertAcquisitionUpdateFixture(t *testing.T, c qualityCase) {
+	t.Helper()
+	switch c.CaseID {
+	case "FEAT005-F-ACQUISITION-QUESTION", "FEAT005-G-ACQUISITION-AI-ONLY":
+		if !reflect.DeepEqual(c.Layers, []string{"knowledge_acquisition", "knowledge_update", "end_to_end"}) || !c.Expected.StoreDiff.None || len(c.Expected.CandidateIDs) != 0 || c.Expected.UpdateStatus != "completed" || len(c.Expected.Operations) != 0 || len(c.Expected.CLI.Arguments) != 0 {
+			t.Fatalf("F/GのAcquisition/Update分離oracleが不正: %s: %#v", c.CaseID, c.Expected)
+		}
+	case "FEAT005-H-UPDATE-CORRECTION":
+		if !reflect.DeepEqual(c.Layers, []string{"cli_store", "knowledge_acquisition", "knowledge_update", "end_to_end"}) || !reflect.DeepEqual(c.Expected.CandidateIDs, []string{"cand-h-1"}) || !reflect.DeepEqual(c.Expected.Operations, []string{"search-text", "search-text", "get", "get-evidence", "revise", "attach-evidence"}) || c.Expected.StoreDiff.None {
+			t.Fatalf("HのAcquisition/Update分離oracleが不正: %#v", c.Expected)
+		}
 	}
 }
 
