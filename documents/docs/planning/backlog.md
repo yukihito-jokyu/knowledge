@@ -8,6 +8,7 @@
 | FEAT-004 会話・作業からの知識 Evidence 更新 | planned | proposed: high | FEAT-001 | UI-002 の取り込み境界は未決定。 |
 | FEAT-005 知識評価の品質保証 | planned | proposed: high | FEAT-001〜004 | Scenario A〜J を層別評価へ対応付ける。 |
 | FEAT-006 ローカル Semantic Search 移行 | planned（初期提供後） | proposed: high | FEAT-001 | DEC-REQ-001 に従い、ローカル Embedding と Vector Index を追加する。既存正規データから Index を再構築する。 |
+| FEAT-007 隔離Knowledge Storeの明示選択 | planned | proposed: high | FEAT-001 | Issue #233。Codex sandbox向けに明示Storeを選択可能にし、既定Storeは変更しない。 |
 
 ## 優先順位に関する注意
 

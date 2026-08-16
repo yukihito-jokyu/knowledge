@@ -23,6 +23,7 @@
 | REQ-019 | FEAT-002, FEAT-003, FEAT-004 |
 | REQ-020 | FEAT-002, FEAT-003 |
 | REQ-021 | FEAT-002, FEAT-005 |
+| REQ-022 | FEAT-007 |
 
 | 業務規則 | Feature |
 |---|---|
@@ -35,8 +36,8 @@
 | BR-007 | FEAT-001, FEAT-002 |
 | BR-008 | FEAT-001, FEAT-004, FEAT-005 |
 | BR-009 | FEAT-003, FEAT-005 |
-| BR-010 | FEAT-001, FEAT-002, FEAT-003, FEAT-004 |
+| BR-010 | FEAT-001, FEAT-002, FEAT-003, FEAT-004, FEAT-007 |
 
 ## 網羅性確認
 
-すべての REQ-001〜REQ-021 および BR-001〜BR-010 は少なくとも一つの Feature に対応付け済みである。CON-001〜CON-006 と NFR-001〜NFR-006 は横断的な初期設計入力として扱う。
+すべての REQ-001〜REQ-022 および BR-001〜BR-010 は少なくとも一つの Feature に対応付け済みである。CON-001〜CON-007 と NFR-001〜NFR-007 は横断的な初期設計入力として扱う。

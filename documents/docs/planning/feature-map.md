@@ -60,9 +60,20 @@
 - **Dependencies:** FEAT-001
 - **Status:** planned（初期提供後）
 
+## FEAT-007: 隔離Knowledge Storeの明示選択
+
+- **Goal:** Codex workspace sandboxなどでも、既定Storeを変更せずに利用者が書込み可能なローカルSQLite Storeを選択してKnowledge CLIとworkflowを実行できるようにする。
+- **Primary Actor / Trigger:** 利用者がStoreパスを明示してKnowledge CLIまたはKnowledge Update workflowを実行する。
+- **Covered Requirements:** REQ-022
+- **Related Business Rules:** BR-010
+- **High-level Acceptance:** 明示Storeで全Store利用operationが一貫して実行され、指定なしの既存操作は既定Storeを維持する。不正な指定は構造化CLI errorとして扱い、Codexの検証手順から同じStoreを利用できる。
+- **Dependencies:** FEAT-001
+- **Status:** planned
+
 ## 境界レビュー
 
 - Feature は利用価値・システム能力で分けており、DB・API・UI などのコード層では分割していない。
 - FEAT-003 は評価対象の記事を扱い、FEAT-004 はユーザー知識の観測・更新を扱うため、独立した状態変化と受入条件を持つ。
 - UI-001 と UI-002 は Feature の目的を変えず、提供インターフェースと入力境界を決める横断設計事項として残す。
 - FEAT-006 はコード層の追加ではなく、利用可能な検索能力を段階的に拡張する独立したシステム能力として分離する。
+- FEAT-007 は保存先をOS設定領域から移す作業ではなく、sandboxを含む利用環境で明示的に隔離Storeを選ぶ能力として分離する。
