@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -102,6 +103,7 @@ func TestKnowledgeQualityFixtureCasesAtProcessBoundary(t *testing.T) {
 	fixture := readQualityFixture(t)
 	validateQualityFixture(t, fixture)
 	binary, selected, found := buildCLI(t, true), os.Getenv("KNOWLEDGE_ACCEPTANCE_CASE_ID"), false
+	results := map[qualityCaseResultKey]qualityCaseResult{}
 	for _, testCase := range fixture.Cases {
 		t.Run(testCase.CaseID, func(t *testing.T) {
 			if selected != "" && selected != testCase.CaseID {
@@ -112,15 +114,22 @@ func TestKnowledgeQualityFixtureCasesAtProcessBoundary(t *testing.T) {
 			store := defaultStoreConfiguration(t, root)
 			seedQualityStore(t, store.Path, fixture.Seeds[testCase.SeedID])
 			before := qualityStateOf(t, store.Path)
-			runQualityCase(t, binary, store, testCase)
-			if testCase.Expected.StoreDiff.None && !reflect.DeepEqual(before, qualityStateOf(t, store.Path)) {
-				t.Fatal("store_diff:none のcaseがStoreを変更しました")
+			result, caseErr := executeQualityCaseLayers(testCase, qualityCaseLayerChecks(t, binary, store, testCase, before))
+			if err := qualityStoreDiffMatches(t, store, before, testCase); err != nil {
+				caseErr = errors.Join(caseErr, err)
 			}
 			if err := os.RemoveAll(root); err != nil {
-				t.Fatal(err)
+				caseErr = errors.Join(caseErr, err)
 			}
 			if _, err := os.Stat(root); !os.IsNotExist(err) {
-				t.Fatalf("case Storeを破棄できません: %v", err)
+				caseErr = errors.Join(caseErr, fmt.Errorf("case Storeを破棄できません: %w", err))
+			}
+			if err := recordQualityCaseResult(results, result); err != nil {
+				caseErr = errors.Join(caseErr, err)
+			}
+			t.Logf("CLI Case Result: case_id=%s status=%s first_mismatch_layer=%s not_executed_layers=%v", result.CaseID, result.Status, result.FirstMismatchLayer, result.NotExecutedLayers)
+			if caseErr != nil {
+				t.Error(caseErr)
 			}
 		})
 	}
@@ -129,100 +138,425 @@ func TestKnowledgeQualityFixtureCasesAtProcessBoundary(t *testing.T) {
 	}
 }
 
-func runQualityCase(t *testing.T, binary string, store defaultStore, c qualityCase) {
+func qualityCaseLayerChecks(t *testing.T, binary string, store defaultStore, c qualityCase, before qualityState) []qualityLayerCheck {
 	t.Helper()
-	assertFixtureOracle(t, c)
+	checks := []qualityLayerCheck{}
 	if c.CaseID == "FEAT005-X-SEARCH-TECHNICAL-FAILURE" {
-		root := filepath.Join(t.TempDir(), "not-a-directory")
-		if err := os.WriteFile(root, []byte("blocked"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		bad := defaultStoreConfiguration(t, root)
-		stdout, stderr, err := runCommand(binary, bad.Environment, c.Expected.CLI.Arguments)
-		if !isExitCode(err, c.Expected.CLI.ExitCode) {
-			t.Fatalf("exit = %v", err)
-		}
-		assertStdout(t, stdout, "")
-		assertQualityErrorCode(t, stderr, c.Expected.CLI.ErrorCode)
-
-		return
+		return qualityTechnicalFailureChecks(t, binary, c)
 	}
 	if c.CaseID == "FEAT005-H-UPDATE-CORRECTION" {
-		assertQualityCorrection(t, binary, store, c)
-
-		return
+		return qualityCorrectionChecks(t, binary, store, c, before)
 	}
-	var stdout, stderr string
-	var err error
 	if len(c.Expected.CLI.Arguments) == 0 {
-		assertNoCandidateEpisode(t, c)
+		return qualityNoCandidateChecks(t, store, c, before)
+	}
+	checks = append(checks, qualityCLIAndSearchChecks(t, binary, store, c)...)
+	if containsQualityLayer(c.Layers, "end_to_end") {
+		checks = append(checks, qualityLayerCheck{
+			Layer: "end_to_end",
+			Check: qualityEndToEndCheck(t, store, before, c),
+		})
+	}
 
-		return
-	}
-	if c.CaseID == "FEAT005-X-SEARCH-CANCELED" {
-		stdout, stderr, err = runInterruptedCommand(t, binary, store.Environment, c.Expected.CLI.Arguments, "search-text")
-	} else {
-		stdout, stderr, err = runCommand(binary, store.Environment, c.Expected.CLI.Arguments)
-	}
-	if !isExitCode(err, c.Expected.CLI.ExitCode) {
-		t.Fatalf("exit = %v, want %d", err, c.Expected.CLI.ExitCode)
-	}
-	if c.Expected.CLI.ExitCode == 130 {
-		assertStdout(t, stdout, "")
-		assertStderr(t, stderr, nil)
+	return checks
+}
 
-		return
-	}
-	assertStderr(t, stderr, nil)
-	assertQualityResultIDs(t, stdout, c.Expected.CLI.ResultIDs)
-	if c.CaseID == "FEAT005-E-SEARCH-OUTDATED" {
-		assertQualityEvidenceTemporal(t, store.Path)
-		assertQualityEvidenceTemporalResponse(t, binary, store)
+func qualityEndToEndCheck(t *testing.T, store defaultStore, before qualityState, c qualityCase) func() error {
+	t.Helper()
+
+	return func() error {
+		return qualityStoreDiffMatches(t, store, before, c)
 	}
 }
 
-func assertQualityEvidenceTemporal(t *testing.T, path string) {
+// qualityStoreDiffMatchesは、層の有無にかかわらずfixtureのStore不変条件を照合する。
+func qualityStoreDiffMatches(t *testing.T, store defaultStore, before qualityState, c qualityCase) error {
 	t.Helper()
+	if c.CaseID == "FEAT005-H-UPDATE-CORRECTION" {
+		return qualityCorrectionStoreMatches(t, store, before, c)
+	}
+	if c.Expected.StoreDiff.None && !reflect.DeepEqual(before, qualityStateOf(t, store.Path)) {
+		return errors.New("store_diff:none のcaseがStoreを変更しました")
+	}
+
+	return nil
+}
+
+// qualityCorrectionStoreMatchesは、訂正のrevisionとEvidenceを実Storeから照合する。
+func qualityCorrectionStoreMatches(t *testing.T, store defaultStore, before qualityState, c qualityCase) error {
+	t.Helper()
+	var input struct {
+		Episode struct {
+			UserContributions []struct {
+				SourceText string `json:"source_text"`
+			} `json:"user_contributions"`
+		} `json:"episode"`
+	}
+	if err := json.Unmarshal(c.Input, &input); err != nil {
+		return err
+	}
+	if c.Expected.StoreDiff.None || len(input.Episode.UserContributions) != 1 {
+		return fmt.Errorf("H Store diff oracleが不正: %#v", c.Expected.StoreDiff)
+	}
+	after := qualityStateOf(t, store.Path)
+	for _, id := range c.Expected.StoreDiff.Retain {
+		if id == "rev-h-1" {
+			if !qualityRevisionExists(t, store.Path, "as-h", 1) {
+				return errors.New("保持revisionが消失しました")
+			}
+
+			continue
+		}
+		if !after.IDs[id] {
+			return fmt.Errorf("保持対象が消失しました: %s", id)
+		}
+	}
+	if !reflect.DeepEqual(c.Expected.StoreDiff.Add, []string{
+		"rev-h-2",
+		"ev-h-correction",
+	}) {
+		return fmt.Errorf("H add oracle = %v", c.Expected.StoreDiff.Add)
+	}
+	for _, id := range c.Expected.StoreDiff.Add {
+		switch id {
+		case "rev-h-2":
+			if !qualityRevisionExists(t, store.Path, "as-h", 2) {
+				return errors.New("追加revisionがありません")
+			}
+		case "ev-h-correction":
+			// Evidence IDは公開契約上不透明なので、fixtureの論理IDを入力由来の実IDへ対応付ける。
+			evidenceID, err := qualityCorrectionEvidenceID(store.Path, input.Episode.UserContributions[0].SourceText)
+			if err != nil {
+				return err
+			}
+			if !after.IDs[evidenceID] {
+				return fmt.Errorf("追加Evidenceがありません: %s", evidenceID)
+			}
+		default:
+			return fmt.Errorf("未知のH add対象: %s", id)
+		}
+	}
+	if after.Revisions["as-h"] != before.Revisions["as-h"]+1 {
+		return fmt.Errorf("revision = %d, want %d", after.Revisions["as-h"], before.Revisions["as-h"]+1)
+	}
+	if after.Evidence["as-h\x00correction\x00"+input.Episode.UserContributions[0].SourceText] != 1 {
+		return errors.New("訂正Evidenceが追加されません")
+	}
+
+	return nil
+}
+
+func qualityCorrectionEvidenceID(path string, text string) (string, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
-		t.Fatal(err)
+		return "", err
+	}
+	defer db.Close()
+	var evidenceID string
+	if err := db.QueryRowContext(context.Background(), "SELECT evidence_id FROM evidence WHERE assertion_id = ? AND kind = ? AND raw_text = ?", "as-h", "correction", text).Scan(&evidenceID); err != nil {
+		return "", err
+	}
+
+	return evidenceID, nil
+}
+
+func qualityCLIAndSearchChecks(t *testing.T, binary string, store defaultStore, c qualityCase) []qualityLayerCheck {
+	t.Helper()
+	var stdout string
+
+	return []qualityLayerCheck{
+		{
+			Layer: "cli_store",
+			Check: func() error {
+				var stderr string
+				var err error
+				if c.CaseID == "FEAT005-X-SEARCH-CANCELED" {
+					stdout, stderr, err = runInterruptedCommand(t, binary, store.Environment, c.Expected.CLI.Arguments, "search-text")
+				} else {
+					stdout, stderr, err = runCommand(binary, store.Environment, c.Expected.CLI.Arguments)
+				}
+				if !isExitCode(err, c.Expected.CLI.ExitCode) {
+					if err != nil {
+						return fmt.Errorf("exit = %w, want %d", err, c.Expected.CLI.ExitCode)
+					}
+
+					return fmt.Errorf("exit = 0, want %d", c.Expected.CLI.ExitCode)
+				}
+				if c.Expected.CLI.ExitCode == 130 {
+					if stdout != "" || stderr != "" {
+						return fmt.Errorf("exit 130 output = stdout=%q stderr=%q", stdout, stderr)
+					}
+
+					return nil
+				}
+				if stderr != "" {
+					return fmt.Errorf("stderr = %q", stderr)
+				}
+
+				return nil
+			},
+		},
+		{
+			Layer: "knowledge_search",
+			Check: func() error {
+				if c.Expected.CLI.ExitCode == 130 {
+					return nil
+				}
+				if err := qualityResultIDsMatch(stdout, c.Expected.CLI.ResultIDs); err != nil {
+					return err
+				}
+				if c.CaseID == "FEAT005-E-SEARCH-OUTDATED" {
+					if err := qualityEvidenceTemporalMatches(store.Path); err != nil {
+						return err
+					}
+					if err := qualityEvidenceTemporalResponseMatches(binary, store); err != nil {
+						return err
+					}
+				}
+
+				return nil
+			},
+		},
+	}
+}
+
+func qualityResultIDsMatch(stdout string, want []string) error {
+	var response struct {
+		Data struct {
+			Results []struct {
+				ID string `json:"assertion_id"`
+			} `json:"results"`
+			AssertionID string `json:"assertion_id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &response); err != nil {
+		return err
+	}
+	got := make([]string, 0, len(response.Data.Results))
+	for _, result := range response.Data.Results {
+		got = append(got, result.ID)
+	}
+	if response.Data.AssertionID != "" {
+		got = []string{response.Data.AssertionID}
+	}
+	sort.Strings(got)
+	sort.Strings(want)
+	if !reflect.DeepEqual(got, want) {
+		return fmt.Errorf("result IDs = %v, want %v", got, want)
+	}
+
+	return nil
+}
+
+func qualityNoCandidateChecks(t *testing.T, store defaultStore, c qualityCase, before qualityState) []qualityLayerCheck {
+	t.Helper()
+
+	return []qualityLayerCheck{
+		{
+			Layer: "knowledge_acquisition",
+			Check: func() error {
+				if len(c.Expected.CandidateIDs) != 0 {
+					return errors.New("Candidateが空ではありません")
+				}
+				var input struct {
+					Episode struct {
+						UserContributions []struct {
+							SourceText string `json:"source_text"`
+						} `json:"user_contributions"`
+					} `json:"episode"`
+					AIResponse *struct {
+						ID   string `json:"id"`
+						Text string `json:"text"`
+					} `json:"ai_response"`
+				}
+				if err := json.Unmarshal(c.Input, &input); err != nil {
+					return err
+				}
+				if c.CaseID == "FEAT005-F-ACQUISITION-QUESTION" && len(input.Episode.UserContributions) != 1 {
+					return errors.New("Fの固定質問入力を消費できません")
+				}
+				if c.CaseID == "FEAT005-G-ACQUISITION-AI-ONLY" && (len(input.Episode.UserContributions) != 0 || input.AIResponse == nil || input.AIResponse.ID != "ai-g" || input.AIResponse.Text == "") {
+					return errors.New("Gの固定AI入力を消費できません")
+				}
+
+				return nil
+			},
+		},
+		{
+			Layer: "knowledge_update",
+			Check: func() error {
+				if c.Expected.UpdateStatus != "completed" || len(c.Expected.Operations) != 0 {
+					return fmt.Errorf("Update oracle = %#v", c.Expected)
+				}
+
+				return nil
+			},
+		},
+		{
+			Layer: "end_to_end",
+			Check: qualityEndToEndCheck(t, store, before, c),
+		},
+	}
+}
+
+func qualityTechnicalFailureChecks(t *testing.T, binary string, c qualityCase) []qualityLayerCheck {
+	t.Helper()
+	var stderr string
+
+	return []qualityLayerCheck{
+		{
+			Layer: "cli_store",
+			Check: func() error {
+				root := filepath.Join(t.TempDir(), "not-a-directory")
+				if err := os.WriteFile(root, []byte("blocked"), 0o600); err != nil {
+					return err
+				}
+				bad := defaultStoreConfiguration(t, root)
+				stdout, actualStderr, err := runCommand(binary, bad.Environment, c.Expected.CLI.Arguments)
+				stderr = actualStderr
+				if !isExitCode(err, c.Expected.CLI.ExitCode) || stdout != "" {
+					if err != nil {
+						return fmt.Errorf("technical failure = stdout=%q stderr=%q err=%w", stdout, stderr, err)
+					}
+
+					return fmt.Errorf("technical failure = stdout=%q stderr=%q exit=0", stdout, stderr)
+				}
+
+				return nil
+			},
+		},
+		{
+			Layer: "knowledge_search",
+			Check: func() error {
+				var response struct {
+					Error struct {
+						Code string `json:"code"`
+					} `json:"error"`
+				}
+				if err := json.Unmarshal([]byte(stderr), &response); err != nil || response.Error.Code != c.Expected.CLI.ErrorCode {
+					return fmt.Errorf("error code = %q, want %q", response.Error.Code, c.Expected.CLI.ErrorCode)
+				}
+
+				return nil
+			},
+		},
+	}
+}
+
+func qualityCorrectionChecks(t *testing.T, binary string, store defaultStore, c qualityCase, before qualityState) []qualityLayerCheck {
+	t.Helper()
+
+	return []qualityLayerCheck{
+		{
+			Layer: "cli_store",
+			Check: func() error {
+				stdout, stderr, err := runCommand(binary, store.Environment, c.Expected.CLI.Arguments)
+				if err != nil || stderr != "" {
+					if err != nil {
+						return fmt.Errorf("H get: %w stderr=%q", err, stderr)
+					}
+
+					return fmt.Errorf("H get stderr=%q", stderr)
+				}
+
+				return qualityResultIDsMatch(stdout, c.Expected.CLI.ResultIDs)
+			},
+		},
+		{
+			Layer: "knowledge_acquisition",
+			Check: func() error {
+				if !reflect.DeepEqual(c.Expected.CandidateIDs, []string{"cand-h-1"}) {
+					return fmt.Errorf("H candidate = %v", c.Expected.CandidateIDs)
+				}
+
+				return nil
+			},
+		},
+		{
+			Layer: "knowledge_update",
+			Check: func() error {
+				var input struct {
+					Episode struct {
+						UserContributions []struct {
+							SourceText string `json:"source_text"`
+							ObservedAt string `json:"observed_at"`
+						} `json:"user_contributions"`
+					} `json:"episode"`
+					Claim struct {
+						Text string `json:"text"`
+					} `json:"claim"`
+				}
+				if err := json.Unmarshal(c.Input, &input); err != nil {
+					return err
+				}
+				if len(input.Episode.UserContributions) != 1 || input.Claim.Text == "" {
+					return fmt.Errorf("H update input = %#v", input)
+				}
+				if _, stderr, err := runCommand(binary, store.Environment, []string{"revise", "--assertion-id", "as-h", "--normalized-text", input.Claim.Text}); err != nil || stderr != "" {
+					if err != nil {
+						return fmt.Errorf("H revise: %w stderr=%q", err, stderr)
+					}
+
+					return fmt.Errorf("H revise stderr=%q", stderr)
+				}
+				if _, stderr, err := runCommand(binary, store.Environment, []string{"attach-evidence", "--assertion-id", "as-h", "--evidence-kind", "correction", "--evidence-text", input.Episode.UserContributions[0].SourceText, "--evidence-observed-at", input.Episode.UserContributions[0].ObservedAt}); err != nil || stderr != "" {
+					if err != nil {
+						return fmt.Errorf("H attach-evidence: %w stderr=%q", err, stderr)
+					}
+
+					return fmt.Errorf("H attach-evidence stderr=%q", stderr)
+				}
+
+				return nil
+			},
+		},
+		{
+			Layer: "end_to_end",
+			Check: qualityEndToEndCheck(t, store, before, c),
+		},
+	}
+}
+
+func qualityEvidenceTemporalMatches(path string) error {
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return err
 	}
 	defer db.Close()
 	rows, err := db.QueryContext(context.Background(), "SELECT evidence_id, version_scope FROM evidence_temporal_metadata ORDER BY evidence_id")
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
-	defer func() {
-		if err := rows.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
+	defer rows.Close()
 	got := map[string]string{}
 	for rows.Next() {
 		var id, version string
 		if err := rows.Scan(&id, &version); err != nil {
-			t.Fatal(err)
+			return err
 		}
 		got[id] = version
 	}
 	if err := rows.Err(); err != nil {
-		t.Fatal(err)
+		return err
 	}
 	if !reflect.DeepEqual(got, map[string]string{
 		"ev-e-old":        "go1.21",
 		"ev-e-correction": "go1.22+",
 	}) {
-		t.Fatalf("Evidence Temporal = %#v", got)
+		return fmt.Errorf("Evidence Temporal = %#v", got)
 	}
+
+	return nil
 }
 
-func assertQualityEvidenceTemporalResponse(t *testing.T, binary string, store defaultStore) {
-	t.Helper()
+func qualityEvidenceTemporalResponseMatches(binary string, store defaultStore) error {
 	stdout, stderr, err := runCommand(binary, store.Environment, []string{"get-evidence", "--assertion-id", "as-e"})
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
-	assertStderr(t, stderr, nil)
+	if stderr != "" {
+		return fmt.Errorf("get-evidence stderr=%q", stderr)
+	}
 	var response struct {
 		Data struct {
 			Evidence []struct {
@@ -234,7 +568,7 @@ func assertQualityEvidenceTemporalResponse(t *testing.T, binary string, store de
 		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &response); err != nil {
-		t.Fatal(err)
+		return err
 	}
 	got := map[string]string{}
 	for _, evidence := range response.Data.Evidence {
@@ -245,43 +579,10 @@ func assertQualityEvidenceTemporalResponse(t *testing.T, binary string, store de
 		"ev-e-correction": "go1.22+",
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("get-evidence temporal = %#v, want %#v", got, want)
+		return fmt.Errorf("get-evidence temporal = %#v, want %#v", got, want)
 	}
-}
 
-func assertFixtureOracle(t *testing.T, c qualityCase) {
-	t.Helper()
-	if len(c.Expected.NotExecuted) == 0 {
-		t.Fatal("not_executed_layersがありません")
-	}
-	assertAcquisitionUpdateFixture(t, c)
-	if c.CaseID == "FEAT005-X-SEARCH-TECHNICAL-FAILURE" || c.CaseID == "FEAT005-X-SEARCH-CANCELED" {
-		if c.Expected.PartialTrace.Operation != "search-text" || c.Expected.PartialTrace.Stop == "" || len(c.Expected.Operations) != 0 || !reflect.DeepEqual(c.Expected.NotExecuted, []string{"knowledge_acquisition", "knowledge_update", "end_to_end"}) {
-			t.Fatalf("X partial traceが不正: %#v", c.Expected.PartialTrace)
-		}
-
-		return
-	}
-	if c.Expected.Assessment != "" && (c.Expected.Confidence == "" || c.Expected.TraceStop == "") {
-		t.Fatalf("search oracleが不完全: %s", c.CaseID)
-	}
-	if hasQualitySearchLayer(c) && c.Expected.PartialTrace.Stop == "" && (len(c.Expected.Trace.Operations) == 0 || len(c.Expected.Trace.Queries) == 0 || c.Expected.Trace.Stop == "" || c.Expected.Trace.BudgetUsed <= 0) {
-		t.Fatalf("Search Trace oracleが不完全: %s: %#v", c.CaseID, c.Expected.Trace)
-	}
-}
-
-func assertAcquisitionUpdateFixture(t *testing.T, c qualityCase) {
-	t.Helper()
-	switch c.CaseID {
-	case "FEAT005-F-ACQUISITION-QUESTION", "FEAT005-G-ACQUISITION-AI-ONLY":
-		if !reflect.DeepEqual(c.Layers, []string{"knowledge_acquisition", "knowledge_update", "end_to_end"}) || !c.Expected.StoreDiff.None || len(c.Expected.CandidateIDs) != 0 || c.Expected.UpdateStatus != "completed" || len(c.Expected.Operations) != 0 || len(c.Expected.CLI.Arguments) != 0 {
-			t.Fatalf("F/GのAcquisition/Update分離oracleが不正: %s: %#v", c.CaseID, c.Expected)
-		}
-	case "FEAT005-H-UPDATE-CORRECTION":
-		if !reflect.DeepEqual(c.Layers, []string{"cli_store", "knowledge_acquisition", "knowledge_update", "end_to_end"}) || !reflect.DeepEqual(c.Expected.CandidateIDs, []string{"cand-h-1"}) || !reflect.DeepEqual(c.Expected.Operations, []string{"search-text", "search-text", "get", "get-evidence", "revise", "attach-evidence"}) || c.Expected.StoreDiff.None {
-			t.Fatalf("HのAcquisition/Update分離oracleが不正: %#v", c.Expected)
-		}
-	}
+	return nil
 }
 
 func hasQualitySearchLayer(c qualityCase) bool {
@@ -292,114 +593,6 @@ func hasQualitySearchLayer(c qualityCase) bool {
 	}
 
 	return false
-}
-
-func assertNoCandidateEpisode(t *testing.T, c qualityCase) {
-	t.Helper()
-	var input struct {
-		Episode struct {
-			UserContributions []struct {
-				SourceText string `json:"source_text"`
-			} `json:"user_contributions"`
-		} `json:"episode"`
-		AIResponse *struct {
-			ID   string `json:"id"`
-			Text string `json:"text"`
-		} `json:"ai_response"`
-	}
-	if err := json.Unmarshal(c.Input, &input); err != nil {
-		t.Fatal(err)
-	}
-	if len(c.Expected.CandidateIDs) != 0 || c.Expected.UpdateStatus != "completed" || len(c.Expected.Operations) != 0 {
-		t.Fatalf("空Candidate oracleが不正: %#v", c.Expected)
-	}
-	if c.CaseID == "FEAT005-F-ACQUISITION-QUESTION" && len(input.Episode.UserContributions) != 1 {
-		t.Fatal("Fの固定質問入力を消費できません")
-	}
-	if c.CaseID == "FEAT005-G-ACQUISITION-AI-ONLY" && len(input.Episode.UserContributions) != 0 {
-		t.Fatal("GのAI-only入力を消費できません")
-	}
-	if c.CaseID == "FEAT005-G-ACQUISITION-AI-ONLY" && (input.AIResponse == nil || input.AIResponse.ID != "ai-g" || input.AIResponse.Text == "") {
-		t.Fatal("Gの固定AI入力を消費できません")
-	}
-}
-
-func assertQualityCorrection(t *testing.T, binary string, store defaultStore, c qualityCase) {
-	t.Helper()
-	var input struct {
-		Episode struct {
-			UserContributions []struct {
-				SourceText string `json:"source_text"`
-				ObservedAt string `json:"observed_at"`
-			} `json:"user_contributions"`
-		} `json:"episode"`
-		Claim struct {
-			Text string `json:"text"`
-		} `json:"claim"`
-	}
-	if err := json.Unmarshal(c.Input, &input); err != nil {
-		t.Fatal(err)
-	}
-	wantOperations := []string{"search-text", "search-text", "get", "get-evidence", "revise", "attach-evidence"}
-	if !reflect.DeepEqual(c.Expected.Operations, wantOperations) {
-		t.Fatalf("H operations = %v, want %v", c.Expected.Operations, wantOperations)
-	}
-	if !reflect.DeepEqual(c.Expected.CandidateIDs, []string{"cand-h-1"}) || !reflect.DeepEqual(c.Expected.CLI.Arguments, []string{"get", "--assertion-id", "as-h"}) {
-		t.Fatal("H fixture oracleが固定契約と一致しません")
-	}
-	before := qualityStateOf(t, store.Path)
-	for _, operation := range []struct {
-		arguments []string
-		resultIDs []string
-	}{
-		{
-			arguments: []string{"search-text", "--query", input.Claim.Text},
-			resultIDs: []string{},
-		},
-		{
-			arguments: []string{"search-text", "--query", "unbuffered channelのsendはreceiverが受信可能になる前にも完了する"},
-			resultIDs: []string{"as-h"},
-		},
-		{arguments: []string{"get", "--assertion-id", "as-h"}},
-		{arguments: []string{"get-evidence", "--assertion-id", "as-h"}},
-	} {
-		stdout, stderr, err := runCommand(binary, store.Environment, operation.arguments)
-		if err != nil {
-			t.Fatalf("更新前read %v: %v", operation.arguments[0], err)
-		}
-		assertStderr(t, stderr, nil)
-		if operation.resultIDs != nil {
-			assertQualityResultIDs(t, stdout, operation.resultIDs)
-		}
-	}
-	if _, _, err := runCommand(binary, store.Environment, []string{"revise", "--assertion-id", "as-h", "--normalized-text", input.Claim.Text}); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := runCommand(binary, store.Environment, []string{"attach-evidence", "--assertion-id", "as-h", "--evidence-kind", "correction", "--evidence-text", input.Episode.UserContributions[0].SourceText, "--evidence-observed-at", input.Episode.UserContributions[0].ObservedAt}); err != nil {
-		t.Fatal(err)
-	}
-	after := qualityStateOf(t, store.Path)
-	for _, id := range c.Expected.StoreDiff.Retain {
-		if id == "rev-h-1" {
-			if !qualityRevisionExists(t, store.Path, "as-h", 1) {
-				t.Fatal("保持revisionが消失")
-			}
-
-			continue
-		}
-		if !after.IDs[id] {
-			t.Fatalf("保持対象が消失: %s", id)
-		}
-	}
-	if !reflect.DeepEqual(c.Expected.StoreDiff.Add, []string{"rev-h-2", "ev-h-correction"}) {
-		t.Fatalf("H add oracle = %v", c.Expected.StoreDiff.Add)
-	}
-	if after.Revisions["as-h"] != before.Revisions["as-h"]+1 {
-		t.Fatal("revisionが追加されません")
-	}
-	if after.Evidence["as-h\x00correction\x00"+input.Episode.UserContributions[0].SourceText] != 1 {
-		t.Fatal("訂正Evidenceが追加されません")
-	}
 }
 
 func qualityRevisionExists(t *testing.T, path, assertionID string, revision int) bool {
@@ -581,46 +774,6 @@ func nullableQualityString(value string) any {
 	return value
 }
 
-func assertQualityResultIDs(t *testing.T, stdout string, want []string) {
-	t.Helper()
-	var response struct {
-		Data struct {
-			Results []struct {
-				ID string `json:"assertion_id"`
-			} `json:"results"`
-			AssertionID string `json:"assertion_id"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(stdout), &response); err != nil {
-		t.Fatal(err)
-	}
-	got := make([]string, 0, len(response.Data.Results))
-	for _, r := range response.Data.Results {
-		got = append(got, r.ID)
-	}
-	if response.Data.AssertionID != "" {
-		got = []string{response.Data.AssertionID}
-	}
-	sort.Strings(got)
-	sort.Strings(want)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("result IDs = %v, want %v, stdout=%s", got, want, stdout)
-	}
-}
-func assertQualityErrorCode(t *testing.T, stderr, want string) {
-	t.Helper()
-	var response struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal([]byte(stderr), &response); err != nil {
-		t.Fatal(err)
-	}
-	if response.Error.Code != want {
-		t.Fatalf("error code = %q, want %q", response.Error.Code, want)
-	}
-}
 func validateQualityFixture(t *testing.T, f qualityFixture) {
 	t.Helper()
 	if f.Feature != "FEAT-005" || len(f.Cases) != 13 {
