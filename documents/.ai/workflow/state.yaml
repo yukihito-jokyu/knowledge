@@ -21,8 +21,8 @@ features:
     design: completed
     design_review: completed
     human_design_review: approved # 利用者の「はい」（2026-08-15）によるCodex側workflow実行形態の更新済み詳細設計承認
-    task_breakdown: completed
-    implementation_handoff: ready
+    task_breakdown: in_progress
+    implementation_handoff: drafting
   FEAT-003:
     design: completed
     design_review: completed
@@ -41,8 +41,14 @@ features:
     human_design_review: approved # 利用者の「承認します そしてreadyに進めます」（2026-08-15）によるDEC-FEAT-019反映後詳細設計の明示承認
     task_breakdown: completed
     implementation_handoff: ready
+  FEAT-007:
+    design: completed
+    design_review: completed
+    human_design_review: approved # 利用者の「承認します」（2026-08-16）による詳細設計の明示承認
+    task_breakdown: in_progress
+    implementation_handoff: drafting
 
-current_feature: FEAT-005
+current_feature: FEAT-007
 pending_decisions: []
 open_change_requests: []
 implementation_ready_features:
