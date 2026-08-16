@@ -14,12 +14,14 @@
 - 対象コンテンツの URL とその記事本文
 - Knowledge CLI: ユーザー知識を決定論的に保存・検索・更新する永続知識インターフェース
 - Knowledge Store: Knowledge CLI が管理する Evidence と知識関連情報の保存先
+- Codex workspace sandbox: OSのユーザー設定領域に書込みできない場合がある、利用者が選んだworkspace内Storeを利用できる実行環境
 
 ## 対象範囲
 
 - URL 起点の技術記事を Claim へ分解し、ユーザー知識との差分に基づいて `read_full`、`read_selected`、`skip` を推奨する。
 - 会話・作業エピソードから、ユーザー知識の根拠候補を抽出し、Knowledge Store を継続的に更新する。
 - Evidence 起点の Knowledge State、関連・矛盾・時点差分を含む探索、評価可能な検索・更新を提供する。
+- 利用者が明示したローカルSQLite Storeを、CLI invocation単位で選択できる。指定がない場合の既定Storeは維持する。
 
 ## 対象外
 

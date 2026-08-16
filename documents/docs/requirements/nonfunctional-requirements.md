@@ -41,3 +41,10 @@ Evidence と supersede 前の Knowledge を保持し、訂正後にも再評価�
 
 - **Source:** Issue #175 §44–§45
 - **Status:** confirmed
+
+### NFR-007: Store選択の互換性と隔離
+
+Store指定がない既存CLI invocationは既定Storeの解決・初回migration・JSON/error/exit codeの契約を維持する。指定があるinvocationは、その一意なStoreだけを初期化・migration・読書きし、他のStoreへ接続しない。
+
+- **Source:** Issue #233
+- **Status:** confirmed

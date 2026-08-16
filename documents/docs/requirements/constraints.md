@@ -35,3 +35,9 @@ Knowledge CLI は字句、意味、Concept、Relation、Evidence、矛盾候補�
 物理 DB、Embedding Engine、Index Library、Migration 方式、具体的な検索パラメータは本要件では確定しない。
 
 - **Source:** Issue #175 §16, §48
+
+### CON-007: 明示的なStore選択
+
+Storeの選択は、各CLI invocationの公開optionで絶対SQLiteファイルパスを明示して行う。環境変数・設定ファイル・実行ディレクトリからの暗黙解決は追加しない。
+
+- **Source:** Issue #233

@@ -154,3 +154,10 @@
 - **Source:** Issue #175 §16, §43
 - **Rationale:** Agentic Search の無限化を防ぎ、誤判定を分析可能にするため。
 - **Status:** confirmed
+
+### REQ-022
+
+- **Statement:** 利用者は、Knowledge CLIの起動ごとに絶対パスで指定したローカルSQLite Storeを選択できる。指定がない場合は、既存のOSユーザー設定領域にある既定Storeを使う。
+- **Source:** Issue #233
+- **Rationale:** Codex workspace sandboxなど、OSのユーザー設定領域へ書き込めない実行環境でも、利用者が書込み可能なStoreを明示して検索・更新を実行できるようにするため。
+- **Status:** confirmed
