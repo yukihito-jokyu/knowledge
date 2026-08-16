@@ -1,6 +1,6 @@
 # Knowledge CLI 操作リファレンス
 
-Knowledge Updateが消費するFEAT-001 v1の既存CLI契約を参照する。全操作は `knowledge <operation> <named-options>`。成功はstdoutに一つの`{ "ok": true, "data": ... }`、失敗はstderrに一つの`{ "ok": false, "error": ... }`、成功exitは0である。JSON、option、保存先をこのSkillで拡張しない。
+Knowledge Updateが消費するFEAT-001 v1の既存CLI契約を参照する。全操作は `knowledge [--store <absolute-path>] <operation> <named-options>`。`--store`は呼出側が明示Store実行コンテキストを渡す場合だけoperation前に一度置き、通常Skillは自動追加しない。成功はstdoutに一つの`{ "ok": true, "data": ... }`、失敗はstderrに一つの`{ "ok": false, "error": ... }`、成功exitは0である。JSON、option、保存先をこのSkillで拡張しない。
 
 ## 共通error / exit
 

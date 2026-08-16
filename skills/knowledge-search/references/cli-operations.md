@@ -1,6 +1,6 @@
 # Knowledge CLI 操作リファレンス
 
-このファイルは `knowledge-search` Skillが使う既存の読み取りCLI契約である。コマンドはすべて `knowledge <operation> <named-options>` の形で実行する。標準出力は成功JSONだけ、標準エラーは失敗JSONだけを読む。成功は exit 0 と `{ "ok": true, "data": ... }`、失敗は `{ "ok": false, "error": { "code": ..., "message": ..., "field": ... } }` である。
+このファイルは `knowledge-search` Skillが使う既存の読み取りCLI契約である。コマンドはすべて `knowledge [--store <absolute-path>] <operation> <named-options>` の形で実行する。`--store`は呼出側が明示Store実行コンテキストを渡す場合だけoperation前に一度置き、通常Skillは自動追加しない。標準出力は成功JSONだけ、標準エラーは失敗JSONだけを読む。成功は exit 0 と `{ "ok": true, "data": ... }`、失敗は `{ "ok": false, "error": { "code": ..., "message": ..., "field": ... } }` である。
 
 | error.code | exit code | 扱い |
 | --- | ---: | --- |
