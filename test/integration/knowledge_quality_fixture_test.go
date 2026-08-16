@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/yukihito-jokyu/knowledge/internal/persistence/sqlite"
@@ -73,6 +74,14 @@ type qualityCase struct {
 			Stop      string `json:"stop"`
 			ExitCode  int    `json:"exit_code"`
 		} `json:"partial_trace"`
+		Trace struct {
+			Operations  []string `json:"operations"`
+			Queries     []string `json:"queries"`
+			ResultIDs   []string `json:"result_ids"`
+			EvidenceIDs []string `json:"evidence_ids"`
+			BudgetUsed  int      `json:"budget_used"`
+			Stop        string   `json:"stop"`
+		} `json:"search_trace"`
 		CLI struct {
 			Arguments []string `json:"arguments"`
 			ResultIDs []string `json:"result_ids"`
@@ -255,6 +264,19 @@ func assertFixtureOracle(t *testing.T, c qualityCase) {
 	if c.Expected.Assessment != "" && (c.Expected.Confidence == "" || c.Expected.TraceStop == "") {
 		t.Fatalf("search oracleが不完全: %s", c.CaseID)
 	}
+	if hasQualitySearchLayer(c) && c.Expected.PartialTrace.Stop == "" && (len(c.Expected.Trace.Operations) == 0 || len(c.Expected.Trace.Queries) == 0 || c.Expected.Trace.Stop == "" || c.Expected.Trace.BudgetUsed <= 0) {
+		t.Fatalf("Search Trace oracleが不完全: %s: %#v", c.CaseID, c.Expected.Trace)
+	}
+}
+
+func hasQualitySearchLayer(c qualityCase) bool {
+	for _, layer := range c.Layers {
+		if layer == "knowledge_search" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func assertNoCandidateEpisode(t *testing.T, c qualityCase) {
@@ -613,6 +635,49 @@ func validateQualityFixture(t *testing.T, f qualityFixture) {
 			t.Fatalf("catalog固定caseがありません: %s", id)
 		}
 	}
+}
+
+func TestKnowledgeQualityReadingValueReferences(t *testing.T) {
+	fixture := readQualityFixture(t)
+	verification, err := os.ReadFile(filepath.Join("..", "..", "skills", "reading-value", "references", "verification.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := map[string]string{
+		"FEAT005-A-SEARCH-EMPTY":        "FEAT-003 V-002",
+		"FEAT005-G-ACQUISITION-AI-ONLY": "FEAT-003 V-004",
+		"FEAT005-I-READ-SELECTED":       "FEAT-003 V-002",
+		"FEAT005-J-READ-TRIVIAL":        "FEAT-003 V-002",
+	}
+	for _, testCase := range fixture.Cases {
+		want, required := expected[testCase.CaseID]
+		if !required {
+			continue
+		}
+		var input struct {
+			ReadingValueReference string `json:"reading_value_reference"`
+		}
+		if err := json.Unmarshal(testCase.Input, &input); err != nil {
+			t.Fatal(err)
+		}
+		if input.ReadingValueReference != want || !containsQualityContract(testCase.Contracts, strings.ReplaceAll(want, " ", "/")) {
+			t.Fatalf("Reading Value参照が一意に対応しません: %s", testCase.CaseID)
+		}
+		section := strings.Replace(want, "FEAT-003 ", "### ", 1)
+		if !strings.Contains(string(verification), section) {
+			t.Fatalf("Reading Value検証契約に参照先がありません: %s", want)
+		}
+	}
+}
+
+func containsQualityContract(contracts []string, want string) bool {
+	for _, contract := range contracts {
+		if contract == want {
+			return true
+		}
+	}
+
+	return false
 }
 func readQualityFixture(t *testing.T) qualityFixture {
 	t.Helper()
