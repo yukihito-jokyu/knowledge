@@ -48,7 +48,7 @@ Knowledge CLI は単一の Go module として管理する。`go.mod` の最低G
 
 | 配置 | 責務 | 境界 |
 | --- | --- | --- |
-| `cmd/knowledge/` | CLI process entry、依存の組立て、既定Storeの解決、要求Context、stdout/stderr・exit codeの受渡し | `os.Interrupt`から要求Contextを生成し、DEC-FEAT-005の既定Storeを解決してapplicationとSQLite adapterを接続する。response開始前にContext終了を観測した場合はJSONを出力せず終了コード130とする。SQL・ドメイン判断を持たない。 |
+| `cmd/knowledge/` | CLI process entry、依存の組立て、Storeの解決、要求Context、stdout/stderr・exit codeの受渡し | `os.Interrupt`から要求Contextを生成し、FEAT-007の`--store`指定があればその絶対パス、なければDEC-FEAT-005の既定Storeを解決してapplicationとSQLite adapterを接続する。response開始前にContext終了を観測した場合はJSONを出力せず終了コード130とする。SQL・ドメイン判断を持たない。 |
 | `internal/application/` | 11操作の実行順、入力からdomain値への変換、transactionを使う操作の組立て | CLI transportとSQLite driverを参照しない。公開fieldの正規仕様はFEAT-001設計に従う。 |
 | `internal/domain/` | Assertion、Evidence、Relation等の意味的に中立な値、不変条件、永続化port | 外部I/Oへ依存しない。Codexの意味判断・知識状態評価を実装しない。 |
 | `internal/persistence/sqlite/` | SQLite adapter、SQL、接続初期化、migration実行、派生字句Index | domainの永続化portを実装する。公開CLIのoption／JSONを定義しない。 |
@@ -56,9 +56,9 @@ Knowledge CLI は単一の Go module として管理する。`go.mod` の最低G
 | `testdata/fixtures/` | CLI入力、期待JSON、seedデータ等の再現可能なfixture | プロダクトコードから読み込まない。公開契約の検証データとして扱う。 |
 | `test/integration/` | process境界を通るCLI／SQLite integration test | `go test ./...` で実行する。unit testを置き換えない。 |
 
-migration SQL assetは Go 標準の `embed` を用いて実行バイナリへ同梱する。SQLだけで精度を保てないデータ変換は、versionごとにSQLite adapter内のGo migration handlerを登録して実行してよい。handlerもバイナリに含まれる内部実装であり、SQL assetと同じく既適用versionを編集せず、単一transaction・順序・再実行・失敗時rollbackの規則に従う。実行時に外部migrationディレクトリ、保存先option、設定ファイルを要求しない。通常ビルドの既定StoreはDEC-FEAT-005に従い、`os.UserConfigDir()/knowledge/knowledge.db` とする。適用規則（連番、単一transaction、再実行、破損schemaの扱い）はFEAT-001の [database-schema.md](../features/FEAT-001/design/database-schema.md#migration) を唯一の正規仕様とする。
+migration SQL assetは Go 標準の `embed` を用いて実行バイナリへ同梱する。SQLだけで精度を保てないデータ変換は、versionごとにSQLite adapter内のGo migration handlerを登録して実行してよい。handlerもバイナリに含まれる内部実装であり、SQL assetと同じく既適用versionを編集せず、単一transaction・順序・再実行・失敗時rollbackの規則に従う。実行時に外部migrationディレクトリ、環境変数、設定ファイルを要求しない。FEAT-007の`--store`はinvocationごとの絶対Storeパスを明示する公開optionであり、指定がない通常ビルドの既定StoreはDEC-FEAT-005に従い、`os.UserConfigDir()/knowledge/knowledge.db` とする。適用規則（連番、単一transaction、再実行、破損schemaの扱い）はFEAT-001の [database-schema.md](../features/FEAT-001/design/database-schema.md#migration) を唯一の正規仕様とする。
 
-integration testは、OS標準のユーザー設定ディレクトリ環境をテストごとの一時領域へ隔離し、通常のcompositionでSQLite adapterを接続する。公開CLIのoption、設定、環境変数としてDB指定を追加せず、利用者の既存Storeにも接続しない。
+integration testは、`--store`でテストごとの一時Storeを明示して通常のcompositionでSQLite adapterを接続する。既定Storeを検証するcaseだけはOS標準のユーザー設定ディレクトリ環境を一時領域へ隔離する。利用者の既存Storeには接続しない。
 
 要求Contextはprocess entryからcomposition root、application、domainの永続化port、SQLite adapterへ同一のまま渡す。下位層が`context.Background()`で要求を作り直すことは許可しない。CLI境界はparse、Context非対応の保存先解決／ディレクトリ作成、実行結果の各境界とresponse開始直前でContext終了を確認し、response開始前なら結果・error分類より終了コード130と無出力を優先する。Context終了時、SQLite adapterは読取・migration・transactionへContext対応APIを用い、mutation transactionをcommitしない。response開始後の既出力は取り消さない。公開上の割込み規約はDEC-FEAT-006に従う。
 

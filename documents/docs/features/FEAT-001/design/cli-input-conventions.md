@@ -11,8 +11,10 @@
 ## 基本形
 
 ```text
-knowledge <operation> --<option> <value>
+knowledge [--store <absolute-path>] <operation> --<option> <value>
 ```
+
+`--store`は任意のglobal optionであり、operationより前に一度だけ置く。省略時は既定Storeを使う。空値、重複、相対パス、不正位置はStoreをopenせず`validation_error`、stderr JSON、exit 2となる。指定Storeの親作成、open、migration失敗はfallbackなしの`storage_error`、stderr JSON、exit 1となる。根拠は[DEC-FEAT-023](../../FEAT-007/decisions/DEC-FEAT-023.md)である。
 
 - 入力は名前付きoptionだけで渡し、標準入力のJSONや、JSON文字列をoption値へ埋め込む形式は使わない。
 - 値に空白を含むときは、呼び出し側がシェルの規則で一つの値として渡す。例: `--normalized-text '本文を一つの値として渡す'`。

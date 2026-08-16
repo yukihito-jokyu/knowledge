@@ -19,7 +19,7 @@ TASK-001-03 の取得操作は、SQLite Storeへ接続できなければ通常�
 - 初回実行時に親ディレクトリ、SQLite DB、未適用migrationを作成・適用する。
 - `os.UserConfigDir()` の解決、ディレクトリ作成、DB open、migrationの失敗は `storage_error` とする。
 - 空Storeでは検索は成功の空配列、Assertion指定の取得は `not_found` とする。
-- `--store` option、環境変数、設定ファイル、実行時の外部migrationディレクトリは追加しない。
+- 環境変数、設定ファイル、実行時の外部migrationディレクトリは追加しない。`--store` optionの限定契約は後続のDEC-FEAT-023に従う。
 
 **利点:** OSごとのユーザー単位の標準配置に従い、実行ディレクトリに左右されず、既存の公開CLI入力契約を増やさない。
 
@@ -39,11 +39,13 @@ TASK-001-03 の取得操作は、SQLite Storeへ接続できなければ通常�
 
 **利点:** 利用者が保存先を選べる。
 
-**欠点:** 既承認のCLI・設定契約を拡張し、運用・共有・バックアップ方針も追加で必要になるため、初期提供では採用しない。
+**欠点:** 環境変数・設定による指定は見えない優先順位と運用責任を増やすため採用しない。明示`--store` optionだけはDEC-FEAT-023が後続Featureで採用する。
 
 ## 決定
 
 利用者の明示承認により、選択肢1を採用する。
+
+DEC-FEAT-023により、「`--store` optionを追加しない」という限定だけを置換する。指定なしの既定Storeと初回初期化、このDecisionが禁止する環境変数・設定・外部migrationディレクトリは維持する。
 
 - 通常ビルドの `cmd/knowledge` は、各操作の実行前に上記の既定Storeをcomposition rootで解決する。
 - 読み取り操作は、Storeの初回作成・migration以後、Assertion、Evidence、Concept、Scope、Relation、Temporal Metadata、派生Indexを変更しない。

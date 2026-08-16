@@ -25,7 +25,7 @@
 
 - Knowledge CLIはGo 1.26以上の単一Go moduleとする。SQLite driverはCGOを必要としない`modernc.org/sqlite`を用いる。
 - CLI process entry、application、domain、SQLite persistence、migration asset、fixture、integration testの責務と依存方向は[architecture.md](../../design/architecture.md)「Go module と配置規約」に従う。
-- migration assetはGo標準の`embed`で実行バイナリへ同梱する。通常ビルドのStoreはDEC-FEAT-005で固定したOS標準のユーザー設定ディレクトリ配下に初期化し、実行時の外部migrationディレクトリ、保存先option、設定ファイルを追加しない。
+- migration assetはGo標準の`embed`で実行バイナリへ同梱する。通常ビルドの指定なしStoreはDEC-FEAT-005で固定したOS標準のユーザー設定ディレクトリ配下に初期化する。実行時の外部migrationディレクトリ、環境変数、設定ファイルを追加しない。明示`--store`はDEC-FEAT-023に従う。
 - 共通チェックは`gofmt`、`go test ./...`、`go vet ./...`とする。依存管理では`go.mod`／`go.sum`と`go mod tidy`を用い、第三者lintは必須化しない。
 - 最初の`Ctrl-C`をresponse開始前に観測した場合は同一の要求Contextを全層へ伝播し、JSONなし・stdout／stderrなし・終了コード130で終える。Context非対応初期化APIの前後とresponse開始直前に確認し、中断されたmutation transactionはcommitしない。
 
@@ -65,7 +65,7 @@
 - **目的:** 全11操作が名前付きoptionを受け、決定論的なJSON response・stderr／stdout・終了コードを共通契約どおりに提供できるようにする。
 - **関連要件:** REQ-014、NFR-005、CON-002、CON-003、DEC-FEAT-002、DEC-FEAT-003。
 - **論理領域:** interface。
-- **作業内容:** `knowledge <operation> --<option> <value>` の入力規約、繰返しoptionと複数値グループの順序規則、success/error envelope、error code、終了コード、stdout／stderrの分離を実現する。未知option、値不足、単一値optionの重複、グループ不完全、型・enum・空文字の入力不正を各操作のvalidationへ一貫して接続する。
+- **作業内容:** `knowledge [--store <absolute-path>] <operation> --<option> <value>` の入力規約、繰返しoptionと複数値グループの順序規則、success/error envelope、error code、終了コード、stdout／stderrの分離を実現する。未知option、値不足、単一値optionの重複、グループ不完全、型・enum・空文字の入力不正を各操作のvalidationへ一貫して接続する。
 - **受入条件:**
   - 全11操作が名前付きoption入力のみを受け、標準入力request JSONを公開契約として要求しない。
   - 成功時はstdoutに`ok: true`のJSON objectを1件だけ、失敗時はstdoutなし・stderrに`ok: false`のerror objectを1件だけ出力する。
@@ -186,4 +186,4 @@
 
 - `search-semantic`、Embedding、Vector Index（FEAT-006）。
 - Query生成、検索継続・停止、同一性・Evidence価値の意味判断、`known`等のKnowledge Assessment。
-- 保存先の選択、設定、暗号化、バックアップ、同期、共有、リモート接続。通常ビルドの既定保存先と初回初期化はDEC-FEAT-005の範囲である。
+- 環境変数・設定による保存先選択、暗号化、バックアップ、同期、共有、リモート接続。通常ビルドの既定保存先と初回初期化はDEC-FEAT-005、明示`--store`はDEC-FEAT-023の範囲である。

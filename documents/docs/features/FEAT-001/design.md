@@ -9,7 +9,7 @@ Evidence を正規根拠とする Assertion、Concept、Scope、Relation、Tempo
 ## Scope / Out of Scope
 
 - **含む:** REQ-009〜014 の初期提供、履歴保持、SQLite schema v1、名前付きoption入力とJSON出力を持つCLIの検索・取得・更新操作、字句 Index の維持、DEC-FEAT-005で固定するユーザー固有の既定Store。
-- **含まない:** `search-semantic`、Embedding／Vector Index、Codex による意味判断・検索戦略・知識状態判定、保存先の選択・設定・同期・共有、記事・会話の入力境界。
+- **含まない:** `search-semantic`、Embedding／Vector Index、Codex による意味判断・検索戦略・知識状態判定、環境変数・設定による保存先選択、同期・共有、記事・会話の入力境界。明示`--store`は後続FEAT-007が扱う。
 
 ## Related Requirements / Business Rules
 
@@ -86,7 +86,7 @@ error code は `validation_error`、`not_found`、`conflict`、`storage_error`�
 
 ### CLI入力とJSON出力
 
-各論理操作を `knowledge <operation> --<option> <value>` として呼び出す。入力の名前付きoption、繰返しデータの順序規則は [CLI入力規約](design/cli-input-conventions.md) と各操作資料に従う。response JSON object は標準出力または標準エラーへ出力する。標準入力のrequest JSON、保存先を選ぶoption、設定は定義しない。
+各論理操作を `knowledge [--store <absolute-path>] <operation> --<option> <value>` として呼び出す。入力の名前付きoption、繰返しデータの順序規則は [CLI入力規約](design/cli-input-conventions.md) と各操作資料に従う。response JSON object は標準出力または標準エラーへ出力する。標準入力のrequest JSON、環境変数・設定によるStore選択は定義しない。`--store`の限定契約は[DEC-FEAT-023](../FEAT-007/decisions/DEC-FEAT-023.md)に従う。
 
 端末の最初の`Ctrl-C`は、実行中の要求を中断する。CLI境界がresponse開始前に中断を観測した場合、success／error JSONを出力せず、stdout／stderrを空にして終了コード130で終了する。これは全11操作とStore初期化に共通する例外であり、入力不正や保存失敗を表すerror codeではない。response開始後は既出力を取り消さない。
 
@@ -133,7 +133,7 @@ Operation Documentation Coverage Gate は該当する。初期提供の全11操�
 
 ## Security / NFR Considerations
 
-Store はローカル専用 SQLite、CLI が唯一のアクセス経路である。既定保存先はDEC-FEAT-005に従う。保存先の選択、暗号化、バックアップ、アクセス制御の追加仕様は定めない。OS 標準アクセス制御を前提とし、秘密情報・リモート接続は扱わない。隠しまたは通常非表示のOS標準ディレクトリは利便性のためであり、追加のセキュリティ境界ではない。
+Store はローカル専用 SQLite、CLI が唯一のアクセス経路である。指定なしの既定保存先はDEC-FEAT-005に従い、明示`--store`はDEC-FEAT-023に従う。環境変数・設定、暗号化、バックアップ、アクセス制御の追加仕様は定めない。OS 標準アクセス制御を前提とし、秘密情報・リモート接続は扱わない。隠しまたは通常非表示のOS標準ディレクトリは利便性のためであり、追加のセキュリティ境界ではない。
 
 ## Acceptance / Test Design
 
@@ -162,7 +162,7 @@ Store はローカル専用 SQLite、CLI が唯一のアクセス経路である
 - **DEC-FEAT-002 (L3, superseded_in_part):** JSON出力・exit code・Indexを独立公開操作にしない方針は維持し、request JSON標準入力はDEC-FEAT-003で置き換えた。
 - **DEC-FEAT-003 (L3, decided):** 入力は名前付きoptionとし、標準入力request JSONを使わない。
 - **DEC-FEAT-004 (L3, decided):** `search-contradictions` の結果は `seed` と常にその相手である `target` を返し、保存方向は `direction` で保持する。矛盾候補を `get` / `get-evidence` へ安全に受け渡すため、`contradicts` Relation は Assertion 間に限定する。
-- **DEC-FEAT-005 (L3, decided):** 通常ビルドは `os.UserConfigDir()/knowledge/knowledge.db` を既定Storeとして初期化する。保存先の選択、設定、運用責任を追加しない。
+- **DEC-FEAT-005 (L3, decided):** 通常ビルドは `os.UserConfigDir()/knowledge/knowledge.db` を既定Storeとして初期化する。保存先option禁止だけはDEC-FEAT-023により限定置換され、環境変数・設定・運用責任は追加しない。
 - **DEC-FEAT-006 (L3, decided):** 最初の`Ctrl-C`は要求Contextをcancelし、success／error JSONおよびstdout／stderrを出さず終了コード130で終了する。
 - **DEC-FEAT-007 (L3, decided):** `search-temporal` は任意のRFC 3339 UTC時点または閉区間で、保存済み有効期間を機械的に照合する。時点は包含、期間は重複で一致し、片側`null`は開放境界、両側`null`は時点条件がある照会では不一致とする。時刻は固定幅UTCへ正規化し、SQLiteのTEXT比較を時系列比較として用いる。
 - **L2:** SQLite schema v1 の table／column／Index 名は、承認済み JSON 契約を満たす内部表現である。

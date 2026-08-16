@@ -151,7 +151,7 @@ constraints:
   - 実装Taskはファイルパス、symbol、framework API、library固有の構造を指示しない。
   - Go 1.26以上の単一Go moduleとし、SQLite driverはmodernc.org/sqliteを用いる。CGOまたはC compilerをbuild前提にしない。
   - 実行入口、application、domain、SQLite persistence、migration asset、fixture、integration testの責務・依存方向はInitial Designに従う。
-  - migration SQL assetはGo標準embedでバイナリへ同梱する。SQLだけで精度を保てない変換はversionごとのSQLite adapter内Go migration handlerで実行できる。いずれも実行時の外部migrationディレクトリ、保存先option、設定ファイルを追加しない。
+  - migration SQL assetはGo標準embedでバイナリへ同梱する。SQLだけで精度を保てない変換はversionごとのSQLite adapter内Go migration handlerで実行できる。いずれも実行時の外部migrationディレクトリ、環境変数、設定ファイルを追加しない。明示`--store`はDEC-FEAT-023に従う。
   - 共通チェックはgofmt、go test ./...、go vet ./...とし、依存管理はgo.mod/go.sumおよびgo mod tidyで行う。第三者lintは必須化しない。
   - 最初のCtrl-Cは公開optionを追加せず要求Contextをcancelし、response開始前に観測した場合は通常のsuccess/error JSONを出力せず終了コード130で終える。response開始後の既出力は取り消さない（DEC-FEAT-006）。
 
@@ -183,7 +183,7 @@ interfaces_and_contracts:
   - Lexical search is the initial search capability; semantic search is not a v1 operation.
   - search-contradictions returns selector-matched seed, opposite Assertion target, and stored direction; contradicts endpoints are Assertion-to-Assertion only.
   - search-temporal optionally accepts either an RFC 3339 UTC point or an RFC 3339 UTC closed query interval. Inputs and stored temporal values are normalized to fixed-width UTC with nine fractional digits before SQLite TEXT comparison; schema v2 atomically normalizes existing temporal_metadata values before a read. It matches the stored valid interval by inclusive containment or inclusive overlap; a one-sided null is open and a two-sided null does not match a temporal query.
-  - The normal binary resolves one OS-standard user configuration directory Store at `knowledge/knowledge.db`; callers cannot select another Store through a public option, environment variable, or configuration file.
+  - The normal binary resolves the OS-standard user configuration directory Store at `knowledge/knowledge.db` when `--store` is absent. DEC-FEAT-023 permits one explicit absolute `--store` option before the operation; environment variables and configuration files cannot select a Store.
   - A first Ctrl-C observed before response writing cancels the one request context across all layers and exits 130 with no JSON and empty stdout/stderr; output already started is not retracted.
 
 contract_artifacts:
