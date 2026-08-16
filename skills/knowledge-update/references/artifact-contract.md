@@ -15,7 +15,7 @@
 | `strength` | enum、必須 | `strong`、`moderate`、`weak`。Evidenceから導出する判断用派生値であり、CLI保存fieldではない。 |
 | `observed_at` | RFC 3339 UTC、必須 | Evidenceの観測時刻。 |
 | `proposed_assertion` | string、必須 | 独立評価可能な候補Assertion。 |
-| `search_queries` | 1件以上のstring list、必須 | 先頭は`proposed_assertion`そのもの。以後は原文に明示されたConcept・Alias・Identifierのみを出現順で持ち、完全一致文字列を重複させない。 |
+| `search_queries` | 1件以上のstring list、必須 | 先頭は`proposed_assertion`そのもの。訂正Evidenceに引用された旧命題がある場合だけ二番目に完全な引用文を置ける。残りは原文に明示されたConcept・Alias・Identifierのみを出現順で持ち、完全一致文字列を重複させない。 |
 | `scope` | key/value list、必須 | 明示されたScopeだけ。空可、key重複不可。 |
 | `temporal` | objectまたはnull、必須 | 明示された時点情報だけ。 |
 | `source_excerpt` / `extraction_rationale` | string、必須 | Candidateの確認と抽出理由。 |

@@ -151,7 +151,7 @@ tasks:
 acceptance_criteria:
   - URL評価Episodeの許可されたユーザー由来寄与だけをCandidate化し、除外入力にはCandidateもDecisionも作らない。
   - CandidateはEvidence原文、観測時刻、kind、派生strength、Assertion、Scope/Temporal、順序、検索入力を追跡できる。
-  - Candidate Assertionを先頭に、明示されたConcept・Alias・Identifierを順番に既存search-textへ渡し、Assertion IDを初出順で重複除去する。
+  - Candidate Assertionを先頭に、訂正Evidenceで引用された完全な旧命題（ある場合のみ）、明示されたConcept・Alias・Identifierを順番に既存search-textへ渡し、Assertion IDを初出順で重複除去する。
   - Codexがcreate、attach-evidence、revise、supersede、skipを選択し、既存CLI契約だけで履歴を保つ。失敗・中断・部分適用・結果不明と後続not_startedをUpdate Resultへ残す。
   - Assessment本文完成後・返却前にAcquisitionとUpdateを同期実行し、更新結果にかかわらず同じ本文を返す。
   - 新しいCLI/API/UI、DB、migration、公開JSON、再開ledgerを追加しない。
@@ -170,6 +170,8 @@ decisions:
     source: docs/features/FEAT-004/decisions/DEC-FEAT-014.md
   - id: DEC-FEAT-015
     source: docs/features/FEAT-004/decisions/DEC-FEAT-015.md
+  - id: DEC-FEAT-022
+    source: docs/features/FEAT-004/decisions/DEC-FEAT-022.md
 
 interfaces_and_contracts:
   - Reading ValueはAssessment本文を完成後・返却前にURL評価EpisodeをKnowledge Acquisitionへ渡し、Knowledge Update完了後も同じ本文を返す。
@@ -193,6 +195,8 @@ contract_artifacts:
     source: docs/features/FEAT-004/decisions/DEC-FEAT-014.md
   - kind: synchronous_return_decision
     source: docs/features/FEAT-004/decisions/DEC-FEAT-015.md
+  - kind: correction_quote_query_decision
+    source: docs/features/FEAT-004/decisions/DEC-FEAT-022.md
   - kind: independent_design_review
     source: docs/features/FEAT-004/design-review.md
   - kind: human_design_review
