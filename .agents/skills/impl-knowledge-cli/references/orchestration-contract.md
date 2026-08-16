@@ -19,13 +19,19 @@
 
 すべての実装後roleは同じcandidate IDを参照する。candidate IDは、現在の`HEAD`と、ignore対象を除くworking treeのtracked・untracked変更をスクリプト自身が列挙し、path、内容、mode、削除状態から算出する。`python3 .agents/skills/impl-knowledge-cli/scripts/candidate_fingerprint.py --json`でmanifestとIDを生成し、candidate変更後は再生成する。呼出側が変更pathを指定して集合を狭めてはならない。
 
+承認済みCLI candidateから別branchへbinary・fixture・コピーSkillなどの派生成果物を同期するhandoffでは、review/audit前にcandidateを対象実装branchへcommitし、`git status --porcelain`が空であることを確認してからcandidate fingerprintを算出する。このclean candidateの`HEAD` commit、candidate ID、`candidate_fingerprint.py --json`の完全出力、source IDをImplementation Report、Review Report、Audit Reportへ同じ値で残す。gate後にこのcommitを変更・amendしない。派生writerは、reportに記録されたcommitを隔離worktreeでcheckoutし、binaryなどCLI由来の派生成果物をそのworktreeからだけ生成する。未commitまたはdirty candidateへのPASSを派生成物の同期根拠にしてはならない。
+
+CLI由来binaryとworkflow Skillコピーのsourceは同一commitである必要はない。workflowコピーは、workflow writerが自身の完了条件を満たしたclean workflow source commitから取得する。同期writerはorchestratorから受け取ったPASS済みReview ReportとAudit Reportの全文を改変せず、`verification/evidence/<cli-source-commit>/review-report.md`と`audit-report.md`へ保存する。各reportは同じCLI source commitとcandidate IDを明記し、専用検証branchへ同期するまで変更しない。同期manifestはJSON objectとし、`cli_candidate`へCLI source commit、candidate ID、`candidate_fingerprint.py --json`の完全な出力、normative source inventoryの順序付き配列、同じ配列への`source_fingerprint.py`出力を保存する。`workflow_source`へworkflow source commit、コピー対象rootの順序付き配列、同じ配列への`source_fingerprint.py`出力を保存する。`gate_evidence`へReview/Audit Report各々のrepo相対path、SHA-256、verdict、CLI source commit、candidate IDを保存し、report本文・manifest・CLI fingerprintの値が一致しない場合は停止する。`artifacts`へbinaryとコピー対象ファイルをrepo相対path順に列挙し、各pathのSHA-256を保存する。manifest自身のhashと同期commitは自己参照になるため保存せず、専用branchの同期commitとmanifest内容をGit履歴で照合する。これにより、異なる責務のwriterを混在させず、同期後に各成果物のsourceとgateを反証できる。
+
+handoffがこの派生同期または人間専用Runtime受入を完了条件に含む場合、Audit PASS後のIssue Finalizationはdeferredとする。orchestratorはworkflow writerの同期reportとRuntime受入の実施/未実施状態を受け、全Taskの受入条件が満たされた時だけimplementerへIssue finalizationを委譲する。
+
 Verification Packetは、正規source inventoryとしてFeature directoryなどのroot directoryと個別fileを列挙し、`python3 .agents/skills/impl-knowledge-cli/scripts/source_fingerprint.py <repo-relative-source>...`でdirectory配下を再帰列挙してsource IDを生成する。これにより新しいDecision等の追加も検知する。implementer、reviewer、auditorは各gate直前にsource IDを再計算し、仕様変更時はverifierへ戻す。
 
 ## Baseline Snapshot
 
 - 対象Feature / Task / Issue
 - 開始時刻
-- baseline candidate ID、HEAD、candidate manifest、`git status --short`
+- baseline candidate ID、HEAD、`candidate_fingerprint.py --json`完全出力、`git status --short`
 - 既存の変更fileと未追跡file、および既存変更のdiff要約
 - 今回変更してよい範囲
 - 既存変更と重なるfile、そのbaseline diff、および所有権が不明なfile

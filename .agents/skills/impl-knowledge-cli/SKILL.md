@@ -25,7 +25,7 @@ description: Knowledge CLIのGo実装を、実装前仕様照合・単一writer�
 3. 実装diff、candidate ID、source ID、Implementation Reportをreviewerへ渡す。`PASS`なら次へ進み、`BLOCKED`はfinding ID単位で同じimplementerへ戻す。修正後はcandidate IDと証拠を更新し、同じreviewerが再確認する。`NEEDS_SPEC_RECHECK`はverifierへ戻す。
 4. **コードレビューが同一candidateへ`PASS`した後だけ**、新しい読み取り専用subagentでauditorを起動する。先入観を抑えるため、reviewの詳細findingではなくPASS事実と非blocking riskだけを渡す。`BLOCKED`は実装修正後にreviewから再開し、`NEEDS_SPEC_RECHECK`はverifierから再開する。
 5. 同じ原因のfindingが2回続いた場合、局所修正を繰り返さず、前提・責務境界・test oracleを再評価する。未承認の公開契約で実装を修正しない。
-6. 同一candidateへreviewとauditがともに`PASS`した後だけ、implementerへIssue Finalizationを依頼する。更新後にIssueを再読し、受入条件・検証結果・未完了項目が証拠と一致することを確認する。Issue更新失敗は実装成功と分けて報告する。
+6. 同一candidateへreviewとauditがともに`PASS`した後だけ、handoffが派生検証branch同期を要求するときは、CLI source commit、candidate ID、candidate fingerprint、Review/Audit Report全文をworkflow writerへ渡す。同期writerがReport本文と同期元の一致を確認して専用branchへ不変保存するまで、Issue Finalizationは`deferred`とする。人間専用Runtime受入を要求するときも、そのTask reportと受入状態が揃うまで`deferred`とする。全Taskが揃った後だけimplementerへIssue Finalizationを依頼し、更新後にIssueを再読して受入条件・検証結果・未完了項目が証拠と一致することを確認する。Issue更新失敗は実装成功と分けて報告する。
 
 ## Role Boundaries
 
