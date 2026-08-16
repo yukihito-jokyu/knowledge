@@ -1,0 +1,17 @@
+id: impl-knowledge-workflow-verification-branch-sync
+target_skill: impl-knowledge-workflow
+scenario: 承認済みhandoffが、root workflow Skillと専用検証ブランチのverificationコピーを同時に更新する。
+input_summary: CLI candidateはreviewとauditがPASS済みで、handoffは固定配置から隔離Storeを全argvへ渡すよう求める。
+expected:
+  - root skillsと承認済みのverification/だけを更新する。
+  - reviewとauditがPASSした、実装branchへcommit済みのclean CLI candidateのsource commit、candidate ID、candidate_fingerprint.py --json完全出力、source inventory/fingerprintを同期元として記録する。
+  - workflow writerが検証してcommitしたclean workflow source commitをSkillコピーの同期元として区別する。
+  - CLI source commitの隔離worktreeで生成したbinaryと対応するSkillコピー、および両sourceとそれらのSHA-256をsource-manifest.jsonと同一の専用branch commitへ記録する。
+  - PASS済みReview/Audit Report全文をverification/evidence/<cli-source-commit>/へ保存し、source-manifest.jsonから各reportのpath、SHA-256、verdict、CLI source commit、candidate IDを参照する。
+  - Codex Runtime受入は利用者の会話記録、argv記録、DB事後状態を受け取るまで未実行として扱う。
+forbidden:
+  - Feature実装ブランチへverification/を混在させる。
+  - review/audit前、未commit、またはdirtyなcandidateや既定Storeからbinaryを同期する。
+  - AIがcodex execまたは人間専用Runtime受入を実行する。
+  - Planning成果物、公開CLI、SQLite schemaを編集する。
+related_issue: '#233'

@@ -1,0 +1,14 @@
+id: impl-knowledge-cli-committed-candidate-derived-artifact
+target_skill: impl-knowledge-cli
+scenario: 承認済みCLI candidateから別branchへ実行binaryを同期するhandoff。
+input_summary: CLI実装、独立review、audit後に、別branchの検証環境へbinaryを置く必要がある。
+expected:
+  - review/audit前に対象実装branchへcandidateをcommitし、clean HEADのcandidate ID、candidate_fingerprint.py --json完全出力、source IDを全reportで一致させる。
+  - 派生binaryはreview/audit済みcommitの隔離worktreeから生成する。
+  - workflowコピーはworkflow writerが検証した別のclean workflow source commitから取得し、manifestで両sourceを区別する。
+  - 同期branchにはPASS済みReview/Audit Report全文を不変のevidence fileとして置き、manifestが各path、SHA-256、verdict、CLI source commit、candidate IDを参照する。
+forbidden:
+  - dirtyまたは未commit candidateを派生成果物のsourceにする。
+  - review/audit後にsource commitをamendする。
+  - CLI binaryとworkflowコピーのsourceを根拠なく同一commitとみなす。
+related_issue: '#233'

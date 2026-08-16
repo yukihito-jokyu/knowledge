@@ -2,6 +2,8 @@
 
 ## 2026-08-16
 
+- `impl-knowledge-workflow`: 承認済みhandoffが指定する専用検証ブランチの`verification/`を、CLIのreview/audit PASS済みcandidateからのみ同期できる書込み範囲と手順を追加。人間専用Runtime受入の証跡をAIが受領して判定する回帰scenarioを追加。#233
+- `impl-knowledge-cli`: 別branchへ派生成果物を同期する場合、review/audit前にclean commitへ固定したcandidateと、そのcommit由来binaryを対応付ける規約を追加。workflowコピーのsourceを独立してmanifestへ記録する回帰scenarioを追加。#233
 - `impl-knowledge-cli-implementation`: Codex Runtime受入は人間専用の別taskに分離し、AIが`codex exec`またはそのwrapperを実行しない規約と回帰scenarioを追加。#223
 
 ## 2026-08-14
