@@ -246,7 +246,7 @@ func assertFixtureOracle(t *testing.T, c qualityCase) {
 		t.Fatal("not_executed_layersがありません")
 	}
 	if c.CaseID == "FEAT005-X-SEARCH-TECHNICAL-FAILURE" || c.CaseID == "FEAT005-X-SEARCH-CANCELED" {
-		if c.Expected.PartialTrace.Operation != "search-text" || c.Expected.PartialTrace.Stop == "" || !reflect.DeepEqual(c.Expected.NotExecuted, []string{"assessment", "knowledge_acquisition", "knowledge_update"}) {
+		if c.Expected.PartialTrace.Operation != "search-text" || c.Expected.PartialTrace.Stop == "" || !reflect.DeepEqual(c.Expected.NotExecuted, []string{"knowledge_acquisition", "knowledge_update", "end_to_end"}) {
 			t.Fatalf("X partial traceが不正: %#v", c.Expected.PartialTrace)
 		}
 
@@ -303,7 +303,7 @@ func assertQualityCorrection(t *testing.T, binary string, store defaultStore, c 
 	if err := json.Unmarshal(c.Input, &input); err != nil {
 		t.Fatal(err)
 	}
-	wantOperations := []string{"search-text", "get", "get-evidence", "revise", "attach-evidence"}
+	wantOperations := []string{"search-text", "search-text", "get", "get-evidence", "revise", "attach-evidence"}
 	if !reflect.DeepEqual(c.Expected.Operations, wantOperations) {
 		t.Fatalf("H operations = %v, want %v", c.Expected.Operations, wantOperations)
 	}
@@ -311,16 +311,23 @@ func assertQualityCorrection(t *testing.T, binary string, store defaultStore, c 
 		t.Fatal("H fixture oracleが固定契約と一致しません")
 	}
 	before := qualityStateOf(t, store.Path)
-	for _, arguments := range [][]string{
-		{"search-text", "--query", input.Claim.Text},
-		{"get", "--assertion-id", "as-h"},
-		{"get-evidence", "--assertion-id", "as-h"},
+	for _, operation := range []struct {
+		arguments []string
+		resultIDs []string
+	}{
+		{arguments: []string{"search-text", "--query", input.Claim.Text}, resultIDs: []string{}},
+		{arguments: []string{"search-text", "--query", "unbuffered channelのsendはreceiverが受信可能になる前にも完了する"}, resultIDs: []string{"as-h"}},
+		{arguments: []string{"get", "--assertion-id", "as-h"}},
+		{arguments: []string{"get-evidence", "--assertion-id", "as-h"}},
 	} {
-		_, stderr, err := runCommand(binary, store.Environment, arguments)
+		stdout, stderr, err := runCommand(binary, store.Environment, operation.arguments)
 		if err != nil {
-			t.Fatalf("更新前read %v: %v", arguments[0], err)
+			t.Fatalf("更新前read %v: %v", operation.arguments[0], err)
 		}
 		assertStderr(t, stderr, nil)
+		if operation.resultIDs != nil {
+			assertQualityResultIDs(t, stdout, operation.resultIDs)
+		}
 	}
 	if _, _, err := runCommand(binary, store.Environment, []string{"revise", "--assertion-id", "as-h", "--normalized-text", input.Claim.Text}); err != nil {
 		t.Fatal(err)
@@ -380,7 +387,11 @@ func qualityStateOf(t *testing.T, path string) qualityState {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	state := qualityState{IDs: map[string]bool{}, Revisions: map[string]int{}, Evidence: map[string]int{}}
+	state := qualityState{
+		IDs:       map[string]bool{},
+		Revisions: map[string]int{},
+		Evidence:  map[string]int{},
+	}
 	assertionRows, err := db.QueryContext(context.Background(), "SELECT assertion_id, current_revision FROM assertions")
 	if err != nil {
 		t.Fatal(err)
@@ -579,6 +590,15 @@ func validateQualityFixture(t *testing.T, f qualityFixture) {
 		}
 		if _, ok := f.Seeds[c.SeedID]; !ok {
 			t.Fatalf("seedがない: %s", c.SeedID)
+		}
+		executed := make(map[string]bool, len(c.Layers))
+		for _, layer := range c.Layers {
+			executed[layer] = true
+		}
+		for _, layer := range c.Expected.NotExecuted {
+			if executed[layer] {
+				t.Fatalf("executed_layersとnot_executed_layersが重複: %s: %s", c.CaseID, layer)
+			}
 		}
 		seen[c.CaseID] = true
 	}
